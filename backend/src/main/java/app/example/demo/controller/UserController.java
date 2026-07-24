@@ -1,8 +1,8 @@
-package app.example.demo;
+package app.example.demo.controller;
 
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-public class Controller {
+public class UserController {
     
 }
