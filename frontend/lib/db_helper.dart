@@ -86,7 +86,7 @@ class DBHelper {
 
     return openDatabase(
       path,
-      version: 2, // 版本升到 2，因為多了 foods 表
+      version: 3, // 版本升到 3，因為多了 meal_foods 表
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE meals (
@@ -106,9 +106,19 @@ class DBHelper {
             fat REAL NOT NULL DEFAULT 0
           )
         ''');
+        await db.execute('''
+          CREATE TABLE meal_foods (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT NOT NULL,
+            meal_title TEXT NOT NULL,
+            food_name TEXT NOT NULL,
+            calories INTEGER NOT NULL,
+            portion REAL NOT NULL,
+            UNIQUE(date, meal_title, food_name)
+          )
+        ''');
       },
-      // 如果使用者手機裡已經有舊版(version 1)的資料庫，
-      // 這裡負責「補上」新的 foods 表，不會動到舊資料
+      // 如果使用者手機裡已經有舊版的資料庫，這裡負責「補上」新表
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await db.execute('''
@@ -119,6 +129,19 @@ class DBHelper {
               protein REAL NOT NULL DEFAULT 0,
               carbs REAL NOT NULL DEFAULT 0,
               fat REAL NOT NULL DEFAULT 0
+            )
+          ''');
+        }
+        if (oldVersion < 3) {
+          await db.execute('''
+            CREATE TABLE meal_foods (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              date TEXT NOT NULL,
+              meal_title TEXT NOT NULL,
+              food_name TEXT NOT NULL,
+              calories INTEGER NOT NULL,
+              portion REAL NOT NULL,
+              UNIQUE(date, meal_title, food_name)
             )
           ''');
         }
@@ -156,5 +179,34 @@ class DBHelper {
   Future<int> deleteFood(int id) async {
     final db = await database;
     return db.delete('foods', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<int> updateFood(FoodItem food) async {
+    final db = await database;
+    return db.update('foods', food.toMap(), where: 'id = ?', whereArgs: [food.id]);
+  }
+
+  // ---------- meal_foods：詳細餐點紀錄 ----------
+  Future<int> upsertMealFood(String date, String mealTitle, String foodName, int calories, double portion) async {
+    final db = await database;
+    return db.insert('meal_foods', {
+      'date': date,
+      'meal_title': mealTitle,
+      'food_name': foodName,
+      'calories': calories,
+      'portion': portion,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<int> deleteMealFood(String date, String mealTitle, String foodName) async {
+    final db = await database;
+    return db.delete('meal_foods', 
+      where: 'date = ? AND meal_title = ? AND food_name = ?', 
+      whereArgs: [date, mealTitle, foodName]);
+  }
+
+  Future<List<Map<String, dynamic>>> getMealFoodsByDate(String date) async {
+    final db = await database;
+    return db.query('meal_foods', where: 'date = ?', whereArgs: [date]);
   }
 }

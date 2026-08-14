@@ -88,16 +88,44 @@ class _MyHomePageState extends State<MyHomePage> {
 
   // 從餐點卡片選了一項食物（或手動輸入）後呼叫：
   // 熱量用「累加」的（一餐可能吃好幾樣東西），並記錄品項名稱，同時寫入 SQLite
-  void _onFoodAddedToMeal(String mealTitle, String foodName, int calories) async {
-    final dateStr = '${_today.year}-${_today.month}-${_today.day}';
-    await DBHelper.instance.insertMeal(mealTitle, calories, dateStr);
+  void _onFoodAddedToMeal(String mealTitle, String foodName, int calories, double portion) async {
+    final meal = _mealItems.firstWhere((item) => item.title == mealTitle);
+    final existingIdx = meal.items.indexWhere((e) => e.name == foodName);
+    int calorieDiff = calories;
+
+    if (existingIdx != -1) {
+      calorieDiff = calories - meal.items[existingIdx].calories;
+    }
+
+    final date = _weekDates[_selectedIndex];
+    final dateStr = '${date.year}-${date.month}-${date.day}';
+
+    if (calorieDiff != 0) {
+      await DBHelper.instance.insertMeal(mealTitle, calorieDiff, dateStr);
+    }
+
+    if (portion <= 0) {
+      await DBHelper.instance.deleteMealFood(dateStr, mealTitle, foodName);
+    } else {
+      await DBHelper.instance.upsertMealFood(dateStr, mealTitle, foodName, calories, portion);
+    }
 
     setState(() {
-      final meal = _mealItems.firstWhere((item) => item.title == mealTitle);
-      meal.calories += calories;
-      meal.items.add(foodName);
+      if (existingIdx != -1) {
+        if (portion <= 0) {
+          meal.items.removeAt(existingIdx);
+        } else {
+          meal.items[existingIdx].portion = portion;
+          meal.items[existingIdx].calories = calories;
+        }
+      } else {
+        if (portion > 0) {
+          meal.items.add(MealFoodRecord(name: foodName, calories: calories, portion: portion));
+        }
+      }
+      meal.calories += calorieDiff;
 
-      if (calories <= 0) return;
+      if (calorieDiff <= 0) return;
 
       final today = DateTime(
         DateTime.now().year,
@@ -126,6 +154,34 @@ class _MyHomePageState extends State<MyHomePage> {
     setState(() => _foodLibrary = foods);
   }
 
+  // 從 SQLite 讀取指定日期的所有餐點明細
+  Future<void> _loadMealsForDate(DateTime date) async {
+    final dateStr = '${date.year}-${date.month}-${date.day}';
+    final mealFoods = await DBHelper.instance.getMealFoodsByDate(dateStr);
+    
+    setState(() {
+      for (var meal in _mealItems) {
+        meal.calories = 0;
+        meal.items.clear();
+      }
+
+      for (var row in mealFoods) {
+        final mealTitle = row['meal_title'] as String;
+        final foodName = row['food_name'] as String;
+        final calories = row['calories'] as int;
+        final portion = (row['portion'] as num).toDouble();
+
+        final mealIdx = _mealItems.indexWhere((item) => item.title == mealTitle);
+        if (mealIdx != -1) {
+          _mealItems[mealIdx].items.add(
+            MealFoodRecord(name: foodName, calories: calories, portion: portion)
+          );
+          _mealItems[mealIdx].calories += calories;
+        }
+      }
+    });
+  }
+
   // 使用者在「新增餐點」表單按下確認時呼叫：寫入 SQLite，再重新整理列表
   // 回傳 true 代表存成功，false 代表存失敗（讓呼叫端知道要不要關對話框）
   Future<bool> _addFoodToLibrary(FoodItem food) async {
@@ -139,19 +195,31 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  Future<bool> _updateFoodInLibrary(FoodItem food) async {
+    try {
+      await DBHelper.instance.updateFood(food);
+      await _loadFoodLibrary();
+      return true;
+    } catch (e) {
+      debugPrint('修改餐點失敗: $e');
+      return false;
+    }
+  }
+
   // 從餐點庫刪除一項食物範本
   Future<void> _deleteFoodFromLibrary(int id) async {
     await DBHelper.instance.deleteFood(id);
     await _loadFoodLibrary();
   }
 
-  // 彈出「新增餐點」表單：輸入名稱、熱量、蛋白質、碳水、脂肪
-  void _showAddFoodDialog() {
-    final nameController = TextEditingController();
-    final caloriesController = TextEditingController();
-    final proteinController = TextEditingController();
-    final carbsController = TextEditingController();
-    final fatController = TextEditingController();
+  // 彈出「新增/修改餐點」表單：輸入名稱、熱量、蛋白質、碳水、脂肪
+  void _showAddFoodDialog({FoodItem? foodToEdit}) {
+    final isEdit = foodToEdit != null;
+    final nameController = TextEditingController(text: foodToEdit?.name ?? '');
+    final caloriesController = TextEditingController(text: foodToEdit?.calories.toString() ?? '');
+    final proteinController = TextEditingController(text: isEdit && foodToEdit.protein > 0 ? foodToEdit.protein.toString() : '');
+    final carbsController = TextEditingController(text: isEdit && foodToEdit.carbs > 0 ? foodToEdit.carbs.toString() : '');
+    final fatController = TextEditingController(text: isEdit && foodToEdit.fat > 0 ? foodToEdit.fat.toString() : '');
 
     showDialog(
       context: context,
@@ -164,7 +232,7 @@ class _MyHomePageState extends State<MyHomePage> {
         return StatefulBuilder(
           builder: (dialogContext, setDialogState) {
             return AlertDialog(
-              title: const Text('新增餐點到餐點庫'),
+              title: Text(isEdit ? '修改餐點' : '新增餐點'),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -228,6 +296,7 @@ class _MyHomePageState extends State<MyHomePage> {
                           });
 
                           final food = FoodItem(
+                            id: isEdit ? foodToEdit.id : null,
                             name: name,
                             calories: calories,
                             protein: double.tryParse(proteinController.text.trim()) ?? 0,
@@ -235,7 +304,7 @@ class _MyHomePageState extends State<MyHomePage> {
                             fat: double.tryParse(fatController.text.trim()) ?? 0,
                           );
 
-                          final success = await _addFoodToLibrary(food);
+                          final success = isEdit ? await _updateFoodInLibrary(food) : await _addFoodToLibrary(food);
 
                           if (!dialogContext.mounted) return;
 
@@ -243,7 +312,7 @@ class _MyHomePageState extends State<MyHomePage> {
                             Navigator.pop(dialogContext);
                             // ignore: use_build_context_synchronously
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('已新增「$name」到餐點庫')),
+                              SnackBar(content: Text(isEdit ? '已修改「$name」' : '已新增「$name」')),
                             );
                           } else {
                             setDialogState(() {
@@ -273,8 +342,10 @@ class _MyHomePageState extends State<MyHomePage> {
     showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text('我的餐點庫'),
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('我的餐點'),
           content: SizedBox(
             width: double.maxFinite,
             child: _foodLibrary.isEmpty
@@ -287,9 +358,24 @@ class _MyHomePageState extends State<MyHomePage> {
                       return ListTile(
                         title: Text(food.name),
                         subtitle: Text('${food.calories} kcal'),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () => _deleteFoodFromLibrary(food.id!),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit, color: Colors.blue),
+                              onPressed: () {
+                                Navigator.pop(context);
+                                _showAddFoodDialog(foodToEdit: food);
+                              },
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              onPressed: () async {
+                                await _deleteFoodFromLibrary(food.id!);
+                                setDialogState(() {});
+                              },
+                            ),
+                          ],
                         ),
                       );
                     },
@@ -309,6 +395,8 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
           ],
         );
+          },
+        );
       },
     );
   }
@@ -322,6 +410,7 @@ class _MyHomePageState extends State<MyHomePage> {
     _weekDates = List.generate(7, (i) => monday.add(Duration(days: i)));
     _selectedIndex = _today.weekday - 1;
     _loadFoodLibrary(); // App 一開啟就先把餐點庫讀出來
+    _loadMealsForDate(_weekDates[_selectedIndex]); // 載入今天的餐點紀錄
   }
 
   String get _selectedDateLabel {
@@ -335,6 +424,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   void _selectDay(int index) {
     setState(() => _selectedIndex = index);
+    _loadMealsForDate(_weekDates[index]);
   }
 
     final List<PlanItem> _samplePlans = const [
@@ -689,8 +779,8 @@ class MealEntry extends StatelessWidget {
               items: meal.items,
               foodLibrary: foodLibrary,
               onManageFoodLibrary: onManageFoodLibrary,
-              onFoodSelected: (foodName, calories) =>
-                  onFoodAdded(meal.title, foodName, calories),
+              onFoodSelected: (foodName, calories, portion) =>
+                  onFoodAdded(meal.title, foodName, calories, portion),
             ),
           )
           .toList(),
@@ -711,10 +801,10 @@ class MealCard extends StatefulWidget {
 
   final String title;
   final int calories;
-  final List<String> items;
+  final List<MealFoodRecord> items;
   final List<FoodItem> foodLibrary;
-  // 選好食物後回傳 (foodName, calories)
-  final void Function(String foodName, int calories) onFoodSelected;
+  // 選好食物後回傳 (foodName, calories, portion)
+  final void Function(String foodName, int calories, double portion) onFoodSelected;
   final VoidCallback onManageFoodLibrary;
 
   @override
@@ -772,7 +862,7 @@ class _MealCardState extends State<MealCard> {
                 final value = int.tryParse(_manualCaloriesController.text);
                 if (value != null) {
                   final name = _manualNameController.text.trim();
-                  widget.onFoodSelected(name.isEmpty ? '自訂' : name, value);
+                  widget.onFoodSelected(name.isEmpty ? '自訂' : name, value, 1.0);
                   _manualNameController.clear();
                   _manualCaloriesController.clear();
                 }
@@ -781,6 +871,54 @@ class _MealCardState extends State<MealCard> {
               child: const Text('確認'),
             ),
           ],
+        );
+      },
+    );
+  }
+
+  void _showPortionDialog(FoodItem food) {
+    final existingIdx = widget.items.indexWhere((e) => e.name == food.name);
+    double portion = existingIdx != -1 ? widget.items[existingIdx].portion : 1.0;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            return AlertDialog(
+              title: Text('選擇份數 - ${food.name}'),
+              content: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    onPressed: portion > 0
+                        ? () => setDialogState(() => portion -= 0.5)
+                        : null,
+                    icon: const Icon(Icons.remove),
+                  ),
+                  Text('$portion 份', style: const TextStyle(fontSize: 18)),
+                  IconButton(
+                    onPressed: () => setDialogState(() => portion += 0.5),
+                    icon: const Icon(Icons.add),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('取消'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    final totalCalories = (food.calories * portion).round();
+                    widget.onFoodSelected(food.name, totalCalories, portion);
+                    Navigator.pop(dialogContext);
+                  },
+                  child: const Text('確認'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -832,8 +970,8 @@ class _MealCardState extends State<MealCard> {
                               style: const TextStyle(color: Colors.white70),
                             ),
                             onTap: () {
-                              widget.onFoodSelected(food.name, food.calories);
-                              Navigator.pop(context);
+                              Navigator.pop(context); // 先關閉 bottom sheet
+                              _showPortionDialog(food); // 彈出選擇份數
                             },
                           ),
                         );
@@ -916,7 +1054,12 @@ class _MealCardState extends State<MealCard> {
             Padding(
               padding: const EdgeInsets.only(left: 48.0, right: 12.0, top: 2.0),
               child: Text(
-                widget.items.join('、'),
+                widget.items.map((e) {
+                  String pStr = e.portion == e.portion.toInt()
+                      ? e.portion.toInt().toString()
+                      : e.portion.toString();
+                  return e.portion == 1.0 ? e.name : '${e.name} (x$pStr)';
+                }).join('、'),
                 style: const TextStyle(color: Colors.white54, fontSize: 12),
               ),
             ),
@@ -928,12 +1071,19 @@ class _MealCardState extends State<MealCard> {
 
 
 // - 食物 -
+class MealFoodRecord {
+  MealFoodRecord({required this.name, required this.calories, required this.portion});
+  String name;
+  int calories;
+  double portion;
+}
+
 class MealItem {
-  MealItem({required this.title, this.calories = 0, List<String>? items})
+  MealItem({required this.title, this.calories = 0, List<MealFoodRecord>? items})
       : items = items ?? [];
   final String title;
   int calories;
-  List<String> items; // 這一餐已經加入的餐點名稱，例如 ['水煮蛋', '地瓜']
+  List<MealFoodRecord> items;
 }
 
 // 從餐點庫選了某個食物、或手動輸入後，都會呼叫這個 callback
@@ -941,6 +1091,7 @@ typedef MealFoodAdded = void Function(
   String mealTitle,
   String foodName,
   int calories,
+  double portion,
 );
 
 class PlanItem {
