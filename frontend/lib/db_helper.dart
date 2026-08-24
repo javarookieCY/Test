@@ -1,6 +1,5 @@
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path/path.dart';
 
@@ -14,6 +13,8 @@ class FoodItem {
     this.protein = 0,
     this.carbs = 0,
     this.fat = 0,
+    this.imagePath, // 圖片路徑（asset 路徑），可留空；有值才會顯示在「預設餐點」卡片牆
+    this.description, // 內容物說明，例如：「大麥克 1份、可樂(中) 1杯、中薯 1份」
   });
 
   final int? id; // 資料庫的主鍵，新增前是 null，讀出來後才有值
@@ -22,6 +23,8 @@ class FoodItem {
   final double protein;
   final double carbs;
   final double fat;
+  final String? imagePath;
+  final String? description;
 
   // 把物件轉成 sqflite 看得懂的 Map（給 insert 用）
   Map<String, dynamic> toMap() {
@@ -31,6 +34,8 @@ class FoodItem {
       'protein': protein,
       'carbs': carbs,
       'fat': fat,
+      'image_path': imagePath,
+      'description': description,
     };
   }
 
@@ -43,6 +48,8 @@ class FoodItem {
       protein: (map['protein'] as num).toDouble(),
       carbs: (map['carbs'] as num).toDouble(),
       fat: (map['fat'] as num).toDouble(),
+      imagePath: map['image_path'] as String?,
+      description: map['description'] as String?,
     );
   }
 }
@@ -86,7 +93,7 @@ class DBHelper {
 
     return openDatabase(
       path,
-      version: 3, // 版本升到 3，因為多了 meal_foods 表
+      version: 4, // 版本升到 4，foods 多了 image_path / description（預設餐點卡片用）
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE meals (
@@ -103,7 +110,9 @@ class DBHelper {
             calories INTEGER NOT NULL,
             protein REAL NOT NULL DEFAULT 0,
             carbs REAL NOT NULL DEFAULT 0,
-            fat REAL NOT NULL DEFAULT 0
+            fat REAL NOT NULL DEFAULT 0,
+            image_path TEXT,
+            description TEXT
           )
         ''');
         await db.execute('''
@@ -144,6 +153,10 @@ class DBHelper {
               UNIQUE(date, meal_title, food_name)
             )
           ''');
+        }
+        if (oldVersion < 4) {
+          await db.execute('ALTER TABLE foods ADD COLUMN image_path TEXT');
+          await db.execute('ALTER TABLE foods ADD COLUMN description TEXT');
         }
       },
     );

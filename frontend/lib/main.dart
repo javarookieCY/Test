@@ -220,6 +220,8 @@ class _MyHomePageState extends State<MyHomePage> {
     final proteinController = TextEditingController(text: isEdit && foodToEdit.protein > 0 ? foodToEdit.protein.toString() : '');
     final carbsController = TextEditingController(text: isEdit && foodToEdit.carbs > 0 ? foodToEdit.carbs.toString() : '');
     final fatController = TextEditingController(text: isEdit && foodToEdit.fat > 0 ? foodToEdit.fat.toString() : '');
+    final imagePathController = TextEditingController(text: foodToEdit?.imagePath ?? '');
+    final descriptionController = TextEditingController(text: foodToEdit?.description ?? '');
 
     showDialog(
       context: context,
@@ -261,6 +263,22 @@ class _MyHomePageState extends State<MyHomePage> {
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       decoration: const InputDecoration(labelText: '脂肪 (g)，可留空'),
                     ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: imagePathController,
+                      decoration: const InputDecoration(
+                        labelText: '圖片路徑，可留空',
+                        hintText: 'assets/images/foods/my_food.jpg',
+                      ),
+                    ),
+                    TextField(
+                      controller: descriptionController,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                        labelText: '內容物說明，可留空',
+                        hintText: '例如：雞胸肉 150g、糙米飯 1碗、水煮蛋 1顆',
+                      ),
+                    ),
                     if (errorText != null) ...[
                       const SizedBox(height: 8),
                       Text(errorText!, style: const TextStyle(color: Colors.red)),
@@ -295,6 +313,9 @@ class _MyHomePageState extends State<MyHomePage> {
                             isSaving = true;
                           });
 
+                          final imagePathText = imagePathController.text.trim();
+                          final descriptionText = descriptionController.text.trim();
+
                           final food = FoodItem(
                             id: isEdit ? foodToEdit.id : null,
                             name: name,
@@ -302,6 +323,8 @@ class _MyHomePageState extends State<MyHomePage> {
                             protein: double.tryParse(proteinController.text.trim()) ?? 0,
                             carbs: double.tryParse(carbsController.text.trim()) ?? 0,
                             fat: double.tryParse(fatController.text.trim()) ?? 0,
+                            imagePath: imagePathText.isEmpty ? null : imagePathText,
+                            description: descriptionText.isEmpty ? null : descriptionText,
                           );
 
                           final success = isEdit ? await _updateFoodInLibrary(food) : await _addFoodToLibrary(food);
@@ -386,6 +409,13 @@ class _MyHomePageState extends State<MyHomePage> {
               onPressed: () => Navigator.pop(context),
               child: const Text('關閉'),
             ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _showPresetMealPicker();
+              },
+              child: const Text('選擇預設餐點'),
+            ),
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
@@ -398,6 +428,52 @@ class _MyHomePageState extends State<MyHomePage> {
           },
         );
       },
+    );
+  }
+
+  // 彈出「預設餐點」卡片牆：從螢幕底部滑出，內建範本 + 使用者自己有配圖的自訂餐點
+  // 都用同樣的卡片呈現，點卡片看詳情，內建範本可以一鍵加進自己的餐點庫
+  void _showPresetMealPicker() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _PresetMealSheet(
+        presets: kPresetMeals,
+        customFoods: _foodLibrary.where((f) => (f.imagePath ?? '').isNotEmpty).toList(),
+        onAddPreset: _addPresetMealToLibrary,
+        onEditCustomFood: (food) {
+          Navigator.pop(context);
+          _showAddFoodDialog(foodToEdit: food);
+        },
+      ),
+    );
+  }
+
+  // 把一個內建範本「加入我的餐點庫」：轉成 FoodItem 寫進 SQLite
+  Future<void> _addPresetMealToLibrary(PresetMeal preset) async {
+    final alreadyExists = _foodLibrary.any((f) => f.name == preset.name);
+    if (alreadyExists) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('「${preset.name}」已經在你的餐點庫囉')),
+      );
+      return;
+    }
+
+    final food = FoodItem(
+      name: preset.name,
+      calories: preset.calories,
+      protein: preset.protein,
+      carbs: preset.carbs,
+      fat: preset.fat,
+      imagePath: preset.imagePath,
+      description: preset.ingredients.join('、'),
+    );
+
+    final success = await _addFoodToLibrary(food);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(success ? '已加入「${preset.name}」' : '加入失敗，請稍後再試')),
     );
   }
 
@@ -1094,6 +1170,105 @@ typedef MealFoodAdded = void Function(
   double portion,
 );
 
+// - 預設餐點卡片的資料模型 -
+// 跟 FoodItem 不同：PresetMeal 是寫死在 App 裡的範本，使用者按「加入我的餐點庫」
+// 之後才會真的變成一筆 FoodItem 存進 SQLite
+class PresetMeal {
+  const PresetMeal({
+    required this.name,
+    required this.imagePath,
+    required this.calories,
+    this.protein = 0,
+    this.carbs = 0,
+    this.fat = 0,
+    required this.ingredients,
+  });
+
+  final String name;
+  final String imagePath; // asset 圖片路徑，需自行放圖到 assets/images/foods/ 底下
+  final int calories;
+  final double protein;
+  final double carbs;
+  final double fat;
+  final List<String> ingredients; // 內容物清單，例如：['大麥克 1份', '可樂(中) 1杯', '中薯 1份']
+}
+
+// 8 個範例預設餐點：4 個常見速食套餐 + 4 個健身/健康餐盒
+const List<PresetMeal> kPresetMeals = [
+  PresetMeal(
+    name: '大麥克套餐',
+    imagePath: 'assets/images/foods/mcdonalds_bigmac_meal.jpg',
+    calories: 860,
+    protein: 27,
+    carbs: 103,
+    fat: 37,
+    ingredients: ['大麥克 1份', '中薯 1份', '可樂(中) 1杯'],
+  ),
+  PresetMeal(
+    name: '麥克雞塊套餐（10塊）',
+    imagePath: 'assets/images/foods/mcdonalds_nuggets_meal.jpg',
+    calories: 780,
+    protein: 30,
+    carbs: 95,
+    fat: 32,
+    ingredients: ['麥克雞塊 10塊', '中薯 1份', '可樂(中) 1杯'],
+  ),
+  PresetMeal(
+    name: '勁辣雞腿堡套餐',
+    imagePath: 'assets/images/foods/mcdonalds_spicy_chicken_meal.jpg',
+    calories: 900,
+    protein: 32,
+    carbs: 98,
+    fat: 42,
+    ingredients: ['勁辣雞腿堡 1份', '中薯 1份', '可樂(中) 1杯'],
+  ),
+  PresetMeal(
+    name: '雙層牛肉吉事堡套餐',
+    imagePath: 'assets/images/foods/mcdonalds_double_cheeseburger_meal.jpg',
+    calories: 920,
+    protein: 35,
+    carbs: 90,
+    fat: 46,
+    ingredients: ['雙層牛肉吉事堡 1份', '中薯 1份', '可樂(中) 1杯'],
+  ),
+  PresetMeal(
+    name: '雞胸肉健身餐盒',
+    imagePath: 'assets/images/foods/chicken_breast_fit_box.jpg',
+    calories: 420,
+    protein: 45,
+    carbs: 40,
+    fat: 8,
+    ingredients: ['舒肥雞胸肉 150g', '糙米飯 150g', '花椰菜 100g'],
+  ),
+  PresetMeal(
+    name: '鮭魚藜麥碗',
+    imagePath: 'assets/images/foods/salmon_quinoa_bowl.jpg',
+    calories: 480,
+    protein: 34,
+    carbs: 45,
+    fat: 18,
+    ingredients: ['香煎鮭魚 120g', '藜麥飯 150g', '綜合生菜 100g', '橄欖油醬汁'],
+  ),
+  PresetMeal(
+    name: '地中海雞肉沙拉',
+    imagePath: 'assets/images/foods/mediterranean_chicken_salad.jpg',
+    calories: 390,
+    protein: 32,
+    carbs: 25,
+    fat: 18,
+    ingredients: ['烤雞胸肉 120g', '生菜與小番茄', '菲達起司 20g', '橄欖油醋汁'],
+  ),
+  PresetMeal(
+    name: '牛肉蔬菜便當',
+    imagePath: 'assets/images/foods/beef_veggie_bento.jpg',
+    calories: 560,
+    protein: 38,
+    carbs: 55,
+    fat: 20,
+    ingredients: ['嫩煎牛肉片 130g', '十穀飯 150g', '炒時蔬 120g'],
+  ),
+];
+
 class PlanItem {
   const PlanItem({
     required this.title,
@@ -1204,6 +1379,405 @@ class _PlanDetailSheet extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+// - 預設餐點卡片牆 -
+// 從「管理餐點庫」點「選擇預設餐點」後跳出，內建範本跟使用者自己有配圖的
+// 自訂餐點會混在同一個格線裡，用同樣的卡片樣式呈現
+class _PresetMealSheet extends StatelessWidget {
+  const _PresetMealSheet({
+    required this.presets,
+    required this.customFoods,
+    required this.onAddPreset,
+    required this.onEditCustomFood,
+  });
+
+  final List<PresetMeal> presets;
+  final List<FoodItem> customFoods;
+  final ValueChanged<PresetMeal> onAddPreset;
+  final ValueChanged<FoodItem> onEditCustomFood;
+
+  void _openPresetDetail(BuildContext context, PresetMeal preset) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _PresetMealDetailSheet(
+        preset: preset,
+        onAdd: () {
+          Navigator.pop(context); // 關詳情頁
+          onAddPreset(preset);
+        },
+      ),
+    );
+  }
+
+  void _openCustomDetail(BuildContext context, FoodItem food) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _CustomFoodDetailSheet(
+        food: food,
+        onEdit: () => onEditCustomFood(food),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final totalCount = presets.length + customFoods.length;
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.75,
+      minChildSize: 0.45,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (context, scrollController) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Color.fromARGB(255, 40, 40, 42),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              const SizedBox(height: 10),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 14, 20, 4),
+                child: Row(
+                  children: [
+                    Text('預設餐點',
+                        style: TextStyle(
+                            color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                    SizedBox(width: 8),
+                    Text('點卡片看內容物與營養成分',
+                        style: TextStyle(color: Colors.white54, fontSize: 12)),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: totalCount == 0
+                    ? const Center(
+                        child: Text('目前沒有可顯示的餐點', style: TextStyle(color: Colors.white54)),
+                      )
+                    : GridView.builder(
+                        controller: scrollController,
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 12,
+                          crossAxisSpacing: 12,
+                          childAspectRatio: 0.82,
+                        ),
+                        itemCount: totalCount,
+                        itemBuilder: (context, index) {
+                          if (index < presets.length) {
+                            final preset = presets[index];
+                            return _MealGridCard(
+                              name: preset.name,
+                              imagePath: preset.imagePath,
+                              calories: preset.calories,
+                              tag: '範本',
+                              onTap: () => _openPresetDetail(context, preset),
+                            );
+                          }
+                          final food = customFoods[index - presets.length];
+                          return _MealGridCard(
+                            name: food.name,
+                            imagePath: food.imagePath!,
+                            calories: food.calories,
+                            tag: '我的',
+                            onTap: () => _openCustomDetail(context, food),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// 卡片牆裡的單張卡片：圖片 + 品名 + 熱量 + 來源標籤（範本／我的）
+class _MealGridCard extends StatelessWidget {
+  const _MealGridCard({
+    required this.name,
+    required this.imagePath,
+    required this.calories,
+    required this.tag,
+    required this.onTap,
+  });
+
+  final String name;
+  final String imagePath;
+  final int calories;
+  final String tag;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          color: ElementColors.dayBg,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    _FoodImage(imagePath: imagePath),
+                    Positioned(
+                      top: 6,
+                      left: 6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(tag, style: const TextStyle(color: Colors.white, fontSize: 10)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 2),
+                    Text('$calories kcal', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// 圖片載入失敗（例如你還沒放圖進 assets）時，改顯示一個灰底 icon 佔位，不會讓 App 爆掉
+class _FoodImage extends StatelessWidget {
+  const _FoodImage({required this.imagePath});
+  final String imagePath;
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset(
+      imagePath,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) => Container(
+        color: Colors.white10,
+        alignment: Alignment.center,
+        child: const Icon(Icons.restaurant, color: Colors.white38, size: 32),
+      ),
+    );
+  }
+}
+
+// 內建範本的詳情頁：大圖 + 熱量／三大營養素 + 內容物清單 + 「加入我的餐點庫」
+class _PresetMealDetailSheet extends StatelessWidget {
+  const _PresetMealDetailSheet({required this.preset, required this.onAdd});
+  final PresetMeal preset;
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.65,
+      minChildSize: 0.4,
+      maxChildSize: 0.9,
+      expand: false,
+      builder: (context, scrollController) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Color.fromARGB(255, 40, 40, 42),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: ListView(
+            controller: scrollController,
+            padding: EdgeInsets.zero,
+            children: [
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: _FoodImage(imagePath: preset.imagePath),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(preset.name,
+                        style: const TextStyle(
+                            color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
+                    _NutritionRow(preset: preset),
+                    const SizedBox(height: 16),
+                    const Text('內容物', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    ...preset.ingredients.map((item) => Padding(
+                          padding: const EdgeInsets.only(bottom: 6.0),
+                          child: Text('• $item', style: const TextStyle(color: Colors.white70)),
+                        )),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: onAdd,
+                        icon: const Icon(Icons.add),
+                        label: const Text('加入我的餐點庫'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// 使用者自訂餐點的詳情頁：跟範本長得一樣，但按鈕換成「編輯」，因為它已經在餐點庫裡了
+class _CustomFoodDetailSheet extends StatelessWidget {
+  const _CustomFoodDetailSheet({required this.food, required this.onEdit});
+  final FoodItem food;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final ingredients = (food.description ?? '')
+        .split('、')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.6,
+      minChildSize: 0.4,
+      maxChildSize: 0.9,
+      expand: false,
+      builder: (context, scrollController) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Color.fromARGB(255, 40, 40, 42),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: ListView(
+            controller: scrollController,
+            padding: EdgeInsets.zero,
+            children: [
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: _FoodImage(imagePath: food.imagePath!),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(food.name,
+                        style: const TextStyle(
+                            color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
+                    _NutritionRow(
+                      preset: PresetMeal(
+                        name: food.name,
+                        imagePath: food.imagePath!,
+                        calories: food.calories,
+                        protein: food.protein,
+                        carbs: food.carbs,
+                        fat: food.fat,
+                        ingredients: ingredients,
+                      ),
+                    ),
+                    if (ingredients.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      const Text('內容物', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      ...ingredients.map((item) => Padding(
+                            padding: const EdgeInsets.only(bottom: 6.0),
+                            child: Text('• $item', style: const TextStyle(color: Colors.white70)),
+                          )),
+                    ],
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: onEdit,
+                        icon: const Icon(Icons.edit, color: Colors.white),
+                        label: const Text('編輯這個餐點', style: TextStyle(color: Colors.white)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// 熱量／蛋白質／碳水／脂肪 四格顯示，詳情頁跟自訂餐點頁共用
+class _NutritionRow extends StatelessWidget {
+  const _NutritionRow({required this.preset});
+  final PresetMeal preset;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget stat(String label, String value) {
+      return Expanded(
+        child: Column(
+          children: [
+            Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 2),
+            Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+          ],
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        stat('熱量', '${preset.calories}'),
+        stat('蛋白質', '${preset.protein.toStringAsFixed(0)}g'),
+        stat('碳水', '${preset.carbs.toStringAsFixed(0)}g'),
+        stat('脂肪', '${preset.fat.toStringAsFixed(0)}g'),
+      ],
     );
   }
 }
