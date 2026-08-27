@@ -44,7 +44,7 @@ class DBHelper {
 
     return openDatabase(
       path,
-      version: 3, // 版本升到 3，因為多了 meal_foods 表
+      version: 4, // 版本升到 4，foods 多了 image_path / description（預設餐點卡片用）
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE meals (
@@ -61,7 +61,9 @@ class DBHelper {
             calories INTEGER NOT NULL,
             protein REAL NOT NULL DEFAULT 0,
             carbs REAL NOT NULL DEFAULT 0,
-            fat REAL NOT NULL DEFAULT 0
+            fat REAL NOT NULL DEFAULT 0,
+            image_path TEXT,
+            description TEXT
           )
         ''');
         await db.execute('''
@@ -102,6 +104,10 @@ class DBHelper {
               UNIQUE(date, meal_title, food_name)
             )
           ''');
+        }
+        if (oldVersion < 4) {
+          await db.execute('ALTER TABLE foods ADD COLUMN image_path TEXT');
+          await db.execute('ALTER TABLE foods ADD COLUMN description TEXT');
         }
       },
     );
