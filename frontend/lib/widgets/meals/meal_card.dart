@@ -143,7 +143,7 @@ class _MealCardState extends State<MealCard> {
   void _showFoodPicker() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color.fromARGB(255, 40, 40, 42),
+      backgroundColor: ElementColors.cardBg,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -202,8 +202,9 @@ class _MealCardState extends State<MealCard> {
                           Navigator.pop(context);
                           widget.onManageFoodLibrary();
                         },
-                        icon: const Icon(Icons.add, color: Colors.green),
-                        label: const Text('新增餐點', style: TextStyle(color: Colors.green)),
+                        icon: const Icon(Icons.add, color: ElementColors.accent),
+                        label: const Text('新增餐點',
+                            style: TextStyle(color: ElementColors.accent)),
                       ),
                     ),
                     Expanded(
@@ -259,7 +260,7 @@ class _MealCardState extends State<MealCard> {
               if (widget.calories > 0) const SizedBox(width: 8.0),
               IconButton(
                 onPressed: _showFoodPicker,
-                icon: const Icon(Icons.add, color: Colors.green),
+                icon: const Icon(Icons.add, color: ElementColors.accent),
               ),
               const SizedBox(width: 12.0),
             ],

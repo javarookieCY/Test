@@ -19,7 +19,7 @@ class WeekRow extends StatelessWidget {
   static const _dayLabels = ['一', '二', '三', '四', '五', '六', '日'];
 
   Color _fillColor({required bool isToday, required bool isSelected, required bool isPast}) {
-    if (isSelected && isToday) return Colors.green;
+    if (isSelected && isToday) return ElementColors.accent;
     if (isToday) return Colors.grey.shade300;
     if (isPast) return Colors.grey.shade800;
     return ElementColors.background;
@@ -46,7 +46,7 @@ class WeekRow extends StatelessWidget {
                   shape: BoxShape.circle,
                   color: _fillColor(isToday: isToday, isSelected: isSelected, isPast: isPast),
                   border: Border.all(
-                    color: isSelected ? Colors.green : const Color.fromARGB(255, 87, 85, 85),
+                    color: isSelected ? ElementColors.accent : const Color.fromARGB(255, 87, 85, 85),
                     width: 2.0,
                   ),
                 ),

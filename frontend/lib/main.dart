@@ -1,6 +1,7 @@
 import 'package:device_preview/device_preview.dart';
 import 'package:flutter/material.dart';
-import 'screens/home_screen.dart';
+import 'screens/root_shell.dart';
+import 'utils/constants.dart';
 import 'utils/scroll_behavior.dart';
 
 void main() {
@@ -23,9 +24,12 @@ class MyApp extends StatelessWidget {
       scrollBehavior: MyScrollBehavior(),
       title: 'Demo',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: ElementColors.accent,
+          brightness: Brightness.dark,
+        ),
       ),
-      home: const MyHomePage(title: 'Demo'),
+      home: const RootShell(),
     );
   }
 }

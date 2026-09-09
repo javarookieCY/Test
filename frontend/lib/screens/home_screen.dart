@@ -4,16 +4,23 @@ import '../db_helper.dart';
 import '../models/food_item.dart';
 import '../models/meal_item.dart';
 import '../models/plan_item.dart';
+import '../models/user_profile.dart';
 import '../utils/constants.dart';
 import '../widgets/home/calories_info.dart';
+import '../widgets/home/daily_target_card.dart';
 import '../widgets/home/home_header.dart';
 import '../widgets/home/streak_section.dart';
 import '../widgets/home/week_row.dart';
 import '../widgets/meals/meal_entry.dart';
+import 'food_search_screen.dart';
+import 'onboarding_screen.dart';
 
 class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
+  const MyHomePage({super.key, required this.title, this.exerciseTick = 0});
   final String title;
+
+  /// 由外層 RootShell 傳入，運動紀錄變動時會 +1，用來觸發重新載入消耗熱量。
+  final int exerciseTick;
 
   @override
   State<MyHomePage> createState() => _MyHomePageState();
@@ -26,8 +33,11 @@ class _MyHomePageState extends State<MyHomePage> {
   int _streakCount = 0;
   DateTime? _lastLoggedDate;
 
-  // 使用者自訂的餐點庫（水煮蛋、地瓜...），從 SQLite 讀出來存在這裡
+  // 使用者自訂的餐點庫，從 SQLite 讀出來存在這裡
   List<FoodItem> _foodLibrary = [];
+
+  // 使用者個人資料；null 代表還沒做過 Onboarding
+  UserProfile? _profile;
 
   final List<MealItem> _mealItems = [
     MealItem(title: '早餐'),
@@ -36,12 +46,18 @@ class _MyHomePageState extends State<MyHomePage> {
     MealItem(title: '宵夜'),
     MealItem(title: '其他餐點'),
   ];
-  static const int _dailyCalorieBudget = 3200;
+  // 選取日期的運動消耗熱量（會加回剩餘熱量）
+  int _burnedCalories = 0;
+
+  // 每日熱量目標：有個人資料就用試算值，否則暫用一個保守預設值
+  int get _dailyCalorieBudget => _profile?.targets.calories ?? 2000;
 
   int get _consumedCalories =>
       _mealItems.fold(0, (sum, meal) => sum + meal.calories);
 
-  int get _remainingCalories => _dailyCalorieBudget - _consumedCalories;
+  // 剩餘 = 目標 − 已攝取 + 運動消耗
+  int get _remainingCalories =>
+      _dailyCalorieBudget - _consumedCalories + _burnedCalories;
 
   bool _isSameDay(DateTime a, DateTime b) {
     return a.year == b.year && a.month == b.month && a.day == b.day;
@@ -52,8 +68,7 @@ class _MyHomePageState extends State<MyHomePage> {
     return _isSameDay(a, yesterday);
   }
 
-  // 從餐點卡片選了一項食物（或手動輸入）後呼叫：
-  // 熱量用「累加」的（一餐可能吃好幾樣東西），並記錄品項名稱，同時寫入 SQLite
+
   void _onFoodAddedToMeal(String mealTitle, String foodName, int calories, double portion) async {
     final meal = _mealItems.firstWhere((item) => item.title == mealTitle);
     final existingIdx = meal.items.indexWhere((e) => e.name == foodName);
@@ -120,11 +135,109 @@ class _MyHomePageState extends State<MyHomePage> {
     setState(() => _foodLibrary = foods);
   }
 
+  // 載入個人資料；沒有的話（首次開 App）擋出 Onboarding 頁強制填寫
+  Future<void> _loadProfileThenGate() async {
+    final p = await DBHelper.instance.getUserProfile();
+    if (!mounted) return;
+    if (p != null) {
+      setState(() => _profile = p);
+      return;
+    }
+    // 等第一幀畫完再 push，避免 build 期間動 Navigator
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final result = await Navigator.push<UserProfile>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const OnboardingScreen(),
+          fullscreenDialog: true,
+        ),
+      );
+      if (mounted && result != null) setState(() => _profile = result);
+    });
+  }
+
+  // 重新開 Onboarding（編輯模式），存完更新目標卡片
+  Future<void> _editProfile() async {
+    final result = await Navigator.push<UserProfile>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => OnboardingScreen(initial: _profile),
+      ),
+    );
+    if (mounted && result != null) setState(() => _profile = result);
+  }
+
+  // 記錄今天的體重；體重會影響目標（BMR/蛋白質），所以存完重新載入 profile
+  Future<void> _showLogWeightDialog() async {
+    final controller = TextEditingController(
+      text: _profile?.weightKg.toStringAsFixed(1) ?? '',
+    );
+    final kg = await showDialog<double>(
+      context: context,
+      builder: (dialogContext) {
+        String? errorText;
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            return AlertDialog(
+              title: const Text('記錄體重'),
+              content: TextField(
+                controller: controller,
+                autofocus: true,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: '今天的體重 (kg)',
+                  errorText: errorText,
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('取消'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    final v = double.tryParse(controller.text.trim());
+                    if (v == null || v < 25 || v > 400) {
+                      setDialogState(() => errorText = '請輸入 25–400 之間的數字');
+                      return;
+                    }
+                    Navigator.pop(dialogContext, v);
+                  },
+                  child: const Text('儲存'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (kg == null) return;
+    final now = DateTime.now();
+    final dateStr = '${now.year}-${now.month}-${now.day}';
+    await DBHelper.instance.logWeight(dateStr, kg);
+    final refreshed = await DBHelper.instance.getUserProfile();
+    if (!mounted) return;
+    setState(() => _profile = refreshed);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已記錄體重 $kg kg')),
+    );
+  }
+
+  // 從 SQLite 讀取指定日期的運動消耗熱量
+  Future<void> _loadBurnedForDate(DateTime date) async {
+    final dateStr = '${date.year}-${date.month}-${date.day}';
+    final burned = await DBHelper.instance.getBurnedCaloriesByDate(dateStr);
+    if (!mounted) return;
+    setState(() => _burnedCalories = burned);
+  }
+
   // 從 SQLite 讀取指定日期的所有餐點明細
   Future<void> _loadMealsForDate(DateTime date) async {
     final dateStr = '${date.year}-${date.month}-${date.day}';
     final mealFoods = await DBHelper.instance.getMealFoodsByDate(dateStr);
-    
+    _loadBurnedForDate(date);
+
     setState(() {
       for (var meal in _mealItems) {
         meal.calories = 0;
@@ -176,6 +289,29 @@ class _MyHomePageState extends State<MyHomePage> {
   Future<void> _deleteFoodFromLibrary(int id) async {
     await DBHelper.instance.deleteFood(id);
     await _loadFoodLibrary();
+  }
+
+  // 打開「手動搜尋」畫面：從 TFDA 食品營養庫即時搜尋，挑一筆加進餐點庫。
+  // 數值是每 100 克含量，缺值以 0 帶入。
+  void _openFoodSearch() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => FoodSearchScreen(
+          onPick: (ref) => _addFoodToLibrary(
+            FoodItem(
+              name: ref.name,
+              calories: ref.calories,
+              protein: ref.protein ?? 0,
+              carbs: ref.carbs ?? 0,
+              fat: ref.fat ?? 0,
+              description: '每 100 克｜來源：食品營養成分資料庫'
+                  '${ref.category == null ? '' : '（${ref.category}）'}',
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   // 彈出「新增/修改餐點」表單：輸入名稱、熱量、蛋白質、碳水、脂肪
@@ -347,17 +483,33 @@ class _MyHomePageState extends State<MyHomePage> {
                     },
                   ),
           ),
+          actionsAlignment: MainAxisAlignment.spaceEvenly,
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('關閉'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _showAddFoodDialog();
-              },
-              child: const Text('新增'),
+            SizedBox(
+              width: double.maxFinite,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('關閉'),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _openFoodSearch();
+                    },
+                    child: const Text('搜尋'),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _showAddFoodDialog();
+                    },
+                    child: const Text('新增'),
+                  ),
+                ],
+              ),
             ),
           ],
         );
@@ -376,7 +528,17 @@ class _MyHomePageState extends State<MyHomePage> {
     _weekDates = List.generate(7, (i) => monday.add(Duration(days: i)));
     _selectedIndex = _today.weekday - 1;
     _loadFoodLibrary(); // App 一開啟就先把餐點庫讀出來
-    _loadMealsForDate(_weekDates[_selectedIndex]); // 載入今天的餐點紀錄
+    _loadMealsForDate(_weekDates[_selectedIndex]); // 載入今天的餐點紀錄（含運動消耗）
+    _loadProfileThenGate(); // 載入個人資料；沒有就跳 Onboarding
+  }
+
+  @override
+  void didUpdateWidget(covariant MyHomePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 運動頁新增/刪除紀錄後，RootShell 會改 exerciseTick，這裡重抓消耗熱量
+    if (oldWidget.exerciseTick != widget.exerciseTick) {
+      _loadBurnedForDate(_weekDates[_selectedIndex]);
+    }
   }
 
   String get _selectedDateLabel {
@@ -396,19 +558,19 @@ class _MyHomePageState extends State<MyHomePage> {
     final List<PlanItem> _samplePlans = const [
     PlanItem(
       title: '低碳方案',
-      imagePath: 'assets/images/plan_low_carb.jpg',
+      imagePath: 'assets/images/plans/plan_low_carb.jpg',
       description: '減少精緻澱粉攝取，以蛋白質與蔬菜為主的飲食方式。',
       dietRules: ['每日碳水控制在100g以內', '優先選擇原型食物', '避免含糖飲料'],
     ),
     PlanItem(
       title: '地中海方案',
-      imagePath: 'assets/images/plan_mediterranean.jpg',
+      imagePath: 'assets/images/plans/plan_mediterranean.jpg',
       description: '以橄欖油、魚類、蔬果為主，強調不飽和脂肪。',
       dietRules: ['每週至少2次魚類', '多攝取堅果與豆類', '減少紅肉頻率'],
     ),
     PlanItem(
       title: '高蛋白方案',
-      imagePath: 'assets/images/plan_high_protein.jpg',
+      imagePath: 'assets/images/plans/plan_high_protein.jpg',
       description: '提高蛋白質比例，適合有重訓習慣的人。',
       dietRules: ['每公斤體重攝取1.6-2.2g蛋白質', '分散在三餐攝取', '搭配足夠水分'],
     ),
@@ -439,15 +601,41 @@ class _MyHomePageState extends State<MyHomePage> {
                         StreakInfoRow(streakCount: _streakCount),
                         const SizedBox(height: 15.0),
                         FoodStreakSection(plans: _samplePlans),
-                        CaloriesFetch(
-                          remaining: _remainingCalories,
-                          consumed: _consumedCalories,
-                        ),
+                        if (_profile != null)
+                          DailyTargetCard(
+                            targets: _profile!.targets,
+                            consumed: _consumedCalories,
+                            burned: _burnedCalories,
+                            onEditProfile: _editProfile,
+                          )
+                        else
+                          CaloriesFetch(
+                            remaining: _remainingCalories,
+                            consumed: _consumedCalories,
+                          ),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 15.0),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
+                          child: Wrap(
+                            alignment: WrapAlignment.end,
+                            spacing: 4,
                             children: [
+                              TextButton.icon(
+                                onPressed: _showLogWeightDialog,
+                                icon: const Icon(Icons.monitor_weight_outlined,
+                                    color: Colors.white),
+                                label: const Text(
+                                  '記錄體重',
+                                  style: TextStyle(color: Colors.white),
+                                ),
+                              ),
+                              TextButton.icon(
+                                onPressed: _openFoodSearch,
+                                icon: const Icon(Icons.search, color: Colors.white),
+                                label: const Text(
+                                  '搜尋食品',
+                                  style: TextStyle(color: Colors.white),
+                                ),
+                              ),
                               TextButton.icon(
                                 onPressed: _showManageFoodLibraryDialog,
                                 icon: const Icon(Icons.list_alt, color: Colors.white),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/plan_item.dart';
+import '../../utils/constants.dart';
 
 class PlanDetailSheet extends StatelessWidget {
   const PlanDetailSheet({super.key, required this.plan});
@@ -15,7 +16,7 @@ class PlanDetailSheet extends StatelessWidget {
       builder: (context, scrollController) {
         return Container(
           decoration: const BoxDecoration(
-            color: Color.fromARGB(255, 40, 40, 42),
+            color: ElementColors.cardBg,
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
           padding: const EdgeInsets.all(20.0),

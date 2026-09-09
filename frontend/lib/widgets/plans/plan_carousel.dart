@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/plan_item.dart';
+import '../../utils/constants.dart';
 import 'plan_detail_sheet.dart';
 
 // - 方案飲食規範 -
@@ -47,7 +48,21 @@ class _PlanCarouselState extends State<PlanCarousel> {
             onTap: () => _showPlanDetail(context, plan),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(8.0),
-              child: Image.asset(plan.imagePath, fit: BoxFit.cover),
+              child: Image.asset(
+                plan.imagePath,
+                fit: BoxFit.cover,
+                // 圖片缺失時不要整片紅色錯誤，改顯示方案名稱
+                errorBuilder: (context, error, stackTrace) => Container(
+                  color: ElementColors.cardBg,
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.all(8),
+                  child: Text(
+                    plan.title,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white70),
+                  ),
+                ),
+              ),
             ),
           ),
         );
