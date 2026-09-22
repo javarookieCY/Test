@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import '../utils/chart.dart';
 import '../db_helper.dart';
 import '../models/exercise_entry.dart';
+import '../models/exercise_task.dart';
 import '../models/user_profile.dart';
 import '../utils/constants.dart';
 import '../utils/exercise_data.dart';
 import '../widgets/home/week_row.dart';
+import 'exercise_task_setup_screen.dart';
 
 class ExerciseScreen extends StatefulWidget {
   const ExerciseScreen({super.key, this.onChanged});
@@ -24,6 +26,8 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
   UserProfile? _profile;
   List<double> _weeklyCalories = [];
   List<String> _weeklyLabels = [];
+
+  List<ExerciseTask> _tasks = [];
 
   int get _totalMinutes => _entries.fold(0, (s, e) => s + e.minutes);
   int get _totalCalories => _entries.fold(0, (s, e) => s + e.calories);
@@ -49,23 +53,46 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
     final monday = _today.subtract(Duration(days: _today.weekday - 1));
     _weekDates = List.generate(7, (i) => monday.add(Duration(days: i)));
     _selectedIndex = _today.weekday - 1;
-    _load();
+    _loadForDay();
   }
 
   void _selectDay(int index) {
     setState(() => _selectedIndex = index);
-    _load();
+    _loadForDay();
+  }
+
+  /// 切換日期 / 剛進頁面時用：讀完資料後，如果這天還沒設定訓練清單，
+  /// 就直接跳出設定頁引導使用者輸入。
+  Future<void> _loadForDay() async {
+    await _load();
+    if (!mounted || _tasks.isNotEmpty) return;
+    await _openTaskSetup();
   }
 
   Future<void> _load() async {
     final entries = await DBHelper.instance.getExercisesByDate(_selectedDateStr);
     final profile = await DBHelper.instance.getUserProfile();
+    final tasks = await DBHelper.instance.getExerciseTasksByDate(_selectedDateStr);
     await _loadWeeklyTrend();
     if (!mounted) return;
     setState(() {
       _entries = entries;
       _profile = profile;
+      _tasks = tasks;
     });
+  }
+
+  Future<void> _openTaskSetup() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ExerciseTaskSetupScreen(
+          date: _selectedDateStr,
+          dateLabel: _selectedDateLabel,
+        ),
+      ),
+    );
+    await _load();
   }
 
   /// 撈「最近 7 天（含今天）」每天的運動消耗熱量，組成折線圖要的資料。
@@ -100,6 +127,17 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
     widget.onChanged?.call();
   }
 
+  Future<void> _toggleTaskDone(ExerciseTask task) async {
+    if (task.id == null) return;
+    await DBHelper.instance.setExerciseTaskDone(task.id!, !task.done);
+    await _load();
+  }
+
+  Future<void> _deleteTask(int id) async {
+    await DBHelper.instance.deleteExerciseTask(id);
+    await _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -130,7 +168,15 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
           ),
           const SizedBox(height: 16),
           _summaryCard(),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
+          _taskSectionHeader(),
+          if (_tasks.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _taskRatioBar(),
+          ],
+          const SizedBox(height: 8),
+          _taskList(),
+          const SizedBox(height: 24),
           Text('$_selectedDateLabel紀錄', style: kGreyBoldText),
           const SizedBox(height: 8),
           if (_entries.isEmpty)
@@ -145,10 +191,6 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
           const Text('近 7 天消耗熱量', style: kGreyBoldText),
           const SizedBox(height: 8),
           _weeklyTrendChart(),
-          const SizedBox(height: 24),
-          const Text('訓練計畫', style: kGreyBoldText),
-          const SizedBox(height: 8),
-          ...kWorkoutPlans.map(_planCard),
         ],
       ),
     );
@@ -181,6 +223,113 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
         const SizedBox(height: 2),
         Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12)),
       ],
+    );
+  }
+
+  Widget _taskSectionHeader() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text('$_selectedDateLabel訓練清單', style: kGreyBoldText),
+        IconButton(
+          icon: const Icon(Icons.playlist_add, color: ElementColors.accent),
+          tooltip: '新增動作',
+          onPressed: _openTaskSetup,
+        ),
+      ],
+    );
+  }
+
+  Widget _taskRatioBar() {
+    final strengthCount =
+        _tasks.where((t) => t.category == ExerciseTaskCategory.strength).length;
+    final cardioCount = _tasks.length - strengthCount;
+    final total = _tasks.length;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: SizedBox(
+            height: 8,
+            child: Row(
+              children: [
+                if (strengthCount > 0)
+                  Expanded(
+                    flex: strengthCount,
+                    child: Container(color: ElementColors.accent),
+                  ),
+                if (cardioCount > 0)
+                  Expanded(
+                    flex: cardioCount,
+                    child: Container(color: ElementColors.cardio),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '重訓 $strengthCount 項・有氧 $cardioCount 項（共 $total 項）',
+          style: const TextStyle(color: Colors.white54, fontSize: 12),
+        ),
+      ],
+    );
+  }
+
+  Widget _taskList() {
+    if (_tasks.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Text('還沒設定$_selectedDateLabel的訓練，點右上角「＋」新增動作',
+            style: const TextStyle(color: Colors.white38, fontSize: 13)),
+      );
+    }
+    return Column(children: _tasks.map(_taskTile).toList());
+  }
+
+  Widget _taskTile(ExerciseTask task) {
+    final color =
+        task.category == ExerciseTaskCategory.strength ? ElementColors.accent : ElementColors.cardio;
+    return Card(
+      color: ElementColors.cardBg,
+      margin: const EdgeInsets.only(bottom: 6),
+      child: CheckboxListTile(
+        value: task.done,
+        onChanged: (_) => _toggleTaskDone(task),
+        activeColor: ElementColors.accent,
+        controlAffinity: ListTileControlAffinity.leading,
+        title: Text(
+          task.name,
+          style: TextStyle(
+            color: task.done ? Colors.white38 : Colors.white,
+            decoration: task.done ? TextDecoration.lineThrough : null,
+          ),
+        ),
+        subtitle: Text(
+          task.detailLabel,
+          style: const TextStyle(color: Colors.white54, fontSize: 12),
+        ),
+        secondary: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: color),
+              ),
+              child: Text(task.category.label,
+                  style: TextStyle(color: color, fontSize: 11)),
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.white38, size: 20),
+              onPressed: task.id == null ? null : () => _deleteTask(task.id!),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -225,43 +374,6 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
     );
   }
 
-  Widget _planCard(WorkoutPlan plan) {
-    return Card(
-      color: ElementColors.cardBg,
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ExpansionTile(
-        collapsedIconColor: Colors.white54,
-        iconColor: ElementColors.accent,
-        title: Text(plan.title, style: const TextStyle(color: Colors.white)),
-        subtitle: Text(plan.subtitle,
-            style: const TextStyle(color: Colors.white54, fontSize: 12)),
-        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-        children: plan.items
-            .map(
-              (line) => Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('・', style: TextStyle(color: Colors.white54)),
-                    Expanded(
-                      child: Text(line,
-                          style: const TextStyle(
-                              color: Colors.white70, fontSize: 13, height: 1.4)),
-                    ),
-                  ],
-                ),
-              ),
-            )
-            .toList(),
-      ),
-    );
-  }
-/*
-   Widget _exerciseRecords() {
-    return 
-  }
-*/
   void _showRecordDialog() {
     ExercisePreset selected = kExercisePresets.first;
     ExerciseIntensity intensity = selected.defaultIntensity;

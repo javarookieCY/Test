@@ -6,6 +6,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path/path.dart';
 
 import 'models/exercise_entry.dart';
+import 'models/exercise_task.dart';
 import 'models/food_item.dart';
 import 'models/food_ref_item.dart';
 import 'models/user_profile.dart';
@@ -45,7 +46,7 @@ class DBHelper {
 
     final db = await openDatabase(
       path,
-      version: 8,
+      version: 10,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE meals (
@@ -83,6 +84,8 @@ class DBHelper {
         await db.execute(_createWeightLogSql);
         await db.execute(_createExercisesSql);
         await db.execute(_createWaterLogSql);
+        await db.execute(_createExerciseTasksSql);
+        await _addExerciseTaskDetailColumns(db);
       },
       
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -128,6 +131,12 @@ class DBHelper {
         }
         if (oldVersion < 8) {
           await db.execute(_createWaterLogSql);
+        }
+        if (oldVersion < 9) {
+          await db.execute(_createExerciseTasksSql);
+        }
+        if (oldVersion < 10) {
+          await _addExerciseTaskDetailColumns(db);
         }
       },
     );
@@ -193,6 +202,23 @@ class DBHelper {
       target_ml INTEGER NOT NULL
     )
   ''';
+
+  static const _createExerciseTasksSql = '''
+    CREATE TABLE IF NOT EXISTS exercise_tasks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      date TEXT NOT NULL,
+      category TEXT NOT NULL,
+      name TEXT NOT NULL,
+      done INTEGER NOT NULL DEFAULT 0
+    )
+  ''';
+
+  /// sets（重訓組數）/ minutes（有氧分鐘數）是版本 10 才加的欄位，
+  /// 用 ALTER TABLE 補上，新舊資料庫都能吃到同一份邏輯。
+  Future<void> _addExerciseTaskDetailColumns(Database db) async {
+    await db.execute('ALTER TABLE exercise_tasks ADD COLUMN sets INTEGER');
+    await db.execute('ALTER TABLE exercise_tasks ADD COLUMN minutes INTEGER');
+  }
 
   Future<void> _seedFoodRefIfEmpty(Database db) async {
     final rows = await db.rawQuery('SELECT COUNT(*) AS c FROM food_ref');
@@ -403,6 +429,39 @@ class DBHelper {
       [date],
     );
     return (rows.first['c'] as int?) ?? 0;
+  }
+
+  // ---------- exercise_tasks：今日訓練清單 ----------
+  Future<int> insertExerciseTask(ExerciseTask task) async {
+    final db = await database;
+    return db.insert('exercise_tasks', task.toMap());
+  }
+
+  /// 依「重訓排前面、有氧排後面」排序，同分類內依新增順序排列。
+  Future<List<ExerciseTask>> getExerciseTasksByDate(String date) async {
+    final db = await database;
+    final rows = await db.query(
+      'exercise_tasks',
+      where: 'date = ?',
+      whereArgs: [date],
+      orderBy: "CASE category WHEN 'cardio' THEN 1 ELSE 0 END, id ASC",
+    );
+    return rows.map(ExerciseTask.fromMap).toList();
+  }
+
+  Future<int> setExerciseTaskDone(int id, bool done) async {
+    final db = await database;
+    return db.update(
+      'exercise_tasks',
+      {'done': done ? 1 : 0},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<int> deleteExerciseTask(int id) async {
+    final db = await database;
+    return db.delete('exercise_tasks', where: 'id = ?', whereArgs: [id]);
   }
 
   // ---------- water_log：喝水紀錄 ----------

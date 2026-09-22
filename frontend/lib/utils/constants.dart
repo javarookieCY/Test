@@ -16,6 +16,9 @@ class ElementColors {
   // 淺色介面色調：高亮文字、小標示、進度等
   static const lightUi = Color(0xFFBBE1FA);
 
+  // 有氧專用強調色（跟 accent 的重訓藍做區隔，例如訓練清單的比例條）
+  static const cardio = Color(0xFFE8A33D);
+
   static const dayBg = Color.fromARGB(100, 116, 116, 116);
   static const dayBorder = Color.fromARGB(255, 179, 179, 179);
 }
