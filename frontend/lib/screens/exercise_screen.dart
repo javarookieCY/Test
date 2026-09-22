@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
-
+import '../utils/chart.dart';
 import '../db_helper.dart';
 import '../models/exercise_entry.dart';
 import '../models/user_profile.dart';
 import '../utils/constants.dart';
 import '../utils/exercise_data.dart';
+import '../widgets/home/week_row.dart';
 
-/// 「運動」頁（主畫面往左滑）。
-/// 記錄運動類型 / 時長 / 消耗熱量，並提供內建訓練計畫。
-/// [onChanged] 在新增或刪除紀錄後呼叫，讓首頁重新把「消耗熱量」加回剩餘熱量。
 class ExerciseScreen extends StatefulWidget {
   const ExerciseScreen({super.key, this.onChanged});
 
@@ -19,28 +17,74 @@ class ExerciseScreen extends StatefulWidget {
 }
 
 class _ExerciseScreenState extends State<ExerciseScreen> {
-  late final String _todayStr;
+  late final DateTime _today;
+  late final List<DateTime> _weekDates;
+  late int _selectedIndex;
   List<ExerciseEntry> _entries = [];
   UserProfile? _profile;
+  List<double> _weeklyCalories = [];
+  List<String> _weeklyLabels = [];
 
   int get _totalMinutes => _entries.fold(0, (s, e) => s + e.minutes);
   int get _totalCalories => _entries.fold(0, (s, e) => s + e.calories);
+
+  String _dateKey(DateTime d) => '${d.year}-${d.month}-${d.day}';
+
+  String get _selectedDateStr => _dateKey(_weekDates[_selectedIndex]);
+
+  String get _selectedDateLabel {
+    final date = _weekDates[_selectedIndex];
+    final diff = date.difference(_today).inDays;
+    if (diff == 0) return '今天';
+    if (diff == -1) return '昨天';
+    if (diff == 1) return '明天';
+    return '${date.month}/${date.day}';
+  }
 
   @override
   void initState() {
     super.initState();
     final now = DateTime.now();
-    _todayStr = '${now.year}-${now.month}-${now.day}';
+    _today = DateTime(now.year, now.month, now.day);
+    final monday = _today.subtract(Duration(days: _today.weekday - 1));
+    _weekDates = List.generate(7, (i) => monday.add(Duration(days: i)));
+    _selectedIndex = _today.weekday - 1;
+    _load();
+  }
+
+  void _selectDay(int index) {
+    setState(() => _selectedIndex = index);
     _load();
   }
 
   Future<void> _load() async {
-    final entries = await DBHelper.instance.getExercisesByDate(_todayStr);
+    final entries = await DBHelper.instance.getExercisesByDate(_selectedDateStr);
     final profile = await DBHelper.instance.getUserProfile();
+    await _loadWeeklyTrend();
     if (!mounted) return;
     setState(() {
       _entries = entries;
       _profile = profile;
+    });
+  }
+
+  /// 撈「最近 7 天（含今天）」每天的運動消耗熱量，組成折線圖要的資料。
+  /// 用 DBHelper 既有的 getBurnedCaloriesByDate 逐日查詢，沒紀錄的那天會是 0。
+  Future<void> _loadWeeklyTrend() async {
+    const days = 7;
+    final now = DateTime.now();
+    final values = <double>[];
+    final labels = <String>[];
+    for (int i = days - 1; i >= 0; i--) {
+      final d = now.subtract(Duration(days: i));
+      final kcal = await DBHelper.instance.getBurnedCaloriesByDate(_dateKey(d));
+      values.add(kcal.toDouble());
+      labels.add('${d.month}/${d.day}');
+    }
+    if (!mounted) return;
+    setState(() {
+      _weeklyCalories = values;
+      _weeklyLabels = labels;
     });
   }
 
@@ -76,18 +120,31 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(15, 15, 15, 96),
         children: [
+          Text(_selectedDateLabel, style: kTitleText),
+          const SizedBox(height: 12),
+          WeekRow(
+            today: _today,
+            weekDates: _weekDates,
+            selectedIndex: _selectedIndex,
+            onSelect: _selectDay,
+          ),
+          const SizedBox(height: 16),
           _summaryCard(),
           const SizedBox(height: 16),
-          const Text('今日紀錄', style: kGreyBoldText),
+          Text('$_selectedDateLabel紀錄', style: kGreyBoldText),
           const SizedBox(height: 8),
           if (_entries.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              child: Text('今天還沒有運動紀錄，點右下「記錄運動」新增',
-                  style: TextStyle(color: Colors.white38)),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Text('$_selectedDateLabel還沒有運動紀錄，點右下「記錄運動」新增',
+                  style: const TextStyle(color: Colors.white38)),
             )
           else
             ..._entries.map(_entryTile),
+          const SizedBox(height: 24),
+          const Text('近 7 天消耗熱量', style: kGreyBoldText),
+          const SizedBox(height: 8),
+          _weeklyTrendChart(),
           const SizedBox(height: 24),
           const Text('訓練計畫', style: kGreyBoldText),
           const SizedBox(height: 8),
@@ -124,6 +181,31 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
         const SizedBox(height: 2),
         Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12)),
       ],
+    );
+  }
+
+  Widget _weeklyTrendChart() {
+    if (_weeklyCalories.every((v) => v == 0)) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: ElementColors.cardBg,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: const Text('這幾天還沒有運動紀錄，開始記錄後這裡會畫出趨勢圖',
+            style: TextStyle(color: Colors.white38)),
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.fromLTRB(8, 16, 16, 8),
+      decoration: BoxDecoration(
+        color: ElementColors.cardBg,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: LineChartSample2(
+        dailyValues: _weeklyCalories,
+        dayLabels: _weeklyLabels,
+      ),
     );
   }
 
@@ -175,7 +257,11 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
       ),
     );
   }
-
+/*
+   Widget _exerciseRecords() {
+    return 
+  }
+*/
   void _showRecordDialog() {
     ExercisePreset selected = kExercisePresets.first;
     ExerciseIntensity intensity = selected.defaultIntensity;
@@ -208,7 +294,8 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
 
             return AlertDialog(
               backgroundColor: ElementColors.cardBg,
-              title: const Text('記錄運動', style: TextStyle(color: Colors.white)),
+              title: Text('記錄運動（$_selectedDateLabel）',
+                  style: const TextStyle(color: Colors.white)),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -305,7 +392,7 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
                     if (mins == null || mins <= 0 || kcal == null || kcal < 0) return;
                     Navigator.pop(dialogContext);
                     _addEntry(ExerciseEntry(
-                      date: _todayStr,
+                      date: _selectedDateStr,
                       // 把強度一起記進名稱，之後歷史看得出來（exercises 表沒有獨立欄位）
                       name: '${selected.name}（${intensity.label}）',
                       minutes: mins,

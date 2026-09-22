@@ -9,6 +9,7 @@ import 'models/exercise_entry.dart';
 import 'models/food_item.dart';
 import 'models/food_ref_item.dart';
 import 'models/user_profile.dart';
+import 'models/water_entry.dart';
 
 class DBHelper {
   DBHelper._();
@@ -22,21 +23,16 @@ class DBHelper {
     return _db!;
   }
 
-  // sqflite 原生只支援 Android / iOS。
-  // 在 Windows / macOS / Linux 桌面環境跑的時候，
-  // 要改用 sqflite_common_ffi 提供的桌面版實作，否則會出現
-  // "databaseFactory not initialized" 的錯誤。
   void _ensureFactoryInitialized() {
-    if (_factoryInitialized) return; // 只需要初始化一次
+    if (_factoryInitialized) return; 
 
     final isDesktop = !kIsWeb &&
         (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
 
     if (isDesktop) {
-      sqfliteFfiInit(); // 初始化 ffi 底層(載入對應平台的 sqlite3 函式庫)
-      databaseFactory = databaseFactoryFfi; // 把「開資料庫」的實作換成桌面版
+      sqfliteFfiInit(); 
+      databaseFactory = databaseFactoryFfi; 
     }
-    // Android / iOS 維持原本 sqflite 內建的 databaseFactory，不用做任何事
 
     _factoryInitialized = true;
   }
@@ -49,7 +45,7 @@ class DBHelper {
 
     final db = await openDatabase(
       path,
-      version: 7, // 版本升到 7，把 exercises（運動紀錄）納入正式 schema
+      version: 8,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE meals (
@@ -86,8 +82,9 @@ class DBHelper {
         await db.execute(_createUserProfileSql);
         await db.execute(_createWeightLogSql);
         await db.execute(_createExercisesSql);
+        await db.execute(_createWaterLogSql);
       },
-      // 如果使用者手機裡已經有舊版的資料庫，這裡負責「補上」新表
+      
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await db.execute('''
@@ -129,19 +126,17 @@ class DBHelper {
           // exercises 在更早的版本可能已被手動建立，用 IF NOT EXISTS 保險
           await db.execute(_createExercisesSql);
         }
+        if (oldVersion < 8) {
+          await db.execute(_createWaterLogSql);
+        }
       },
     );
 
-    // 建表(或升級)後，若 food_ref 還是空的就從 asset 灌資料進去。
-    // 放在 openDatabase 之外，onCreate / onUpgrade 兩條路徑都會涵蓋到。
     await _seedFoodRefIfEmpty(db);
 
     return db;
   }
 
-  // food_ref：衛福部 TFDA 食品營養成分參考庫（唯讀）。
-  // 資料由 tools/import_nutrition/build_food_ref.py 產出成
-  // assets/data/food_ref.json，首次啟動時載入。所有數值皆為「每 100 克」含量。
   static const _createFoodRefSql = '''
     CREATE TABLE food_ref (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -161,7 +156,7 @@ class DBHelper {
 
   static const _foodRefAsset = 'assets/data/food_ref.json';
 
-  // user_profile：個人化目標的來源資料，只存一列（id 固定 1）。
+
   static const _createUserProfileSql = '''
     CREATE TABLE user_profile (
       id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -174,7 +169,6 @@ class DBHelper {
     )
   ''';
 
-  // weight_log：每日體重紀錄，之後做「動態微調目標」會用到趨勢。
   static const _createWeightLogSql = '''
     CREATE TABLE weight_log (
       date TEXT PRIMARY KEY,
@@ -182,7 +176,6 @@ class DBHelper {
     )
   ''';
 
-  // exercises：運動紀錄。消耗熱量會回饋到首頁「剩餘熱量」計算。
   static const _createExercisesSql = '''
     CREATE TABLE IF NOT EXISTS exercises (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -193,7 +186,14 @@ class DBHelper {
     )
   ''';
 
-  // 若 food_ref 沒有資料，讀 JSON asset 用單一 transaction 批次寫入。
+  static const _createWaterLogSql = '''
+    CREATE TABLE IF NOT EXISTS water_log (
+      date TEXT PRIMARY KEY,
+      consumed_ml INTEGER NOT NULL,
+      target_ml INTEGER NOT NULL
+    )
+  ''';
+
   Future<void> _seedFoodRefIfEmpty(Database db) async {
     final rows = await db.rawQuery('SELECT COUNT(*) AS c FROM food_ref');
     final count = (rows.first['c'] as int?) ?? 0;
@@ -284,8 +284,6 @@ class DBHelper {
     return (rows.first['c'] as int?) ?? 0;
   }
 
-  // 依名稱 / 俗名關鍵字搜尋（給使用者從參考庫挑食物用）。
-  // 排序：名稱開頭命中 > 名稱包含 > 只有俗名命中，同組再按名稱長度、筆劃。
   Future<List<FoodRefItem>> searchFoodRef(String keyword, {int limit = 30}) async {
     final db = await database;
     final kw = keyword.trim();
@@ -405,5 +403,35 @@ class DBHelper {
       [date],
     );
     return (rows.first['c'] as int?) ?? 0;
+  }
+
+  // ---------- water_log：喝水紀錄 ----------
+  Future<WaterEntry?> getWaterLog(String date) async {
+    final db = await database;
+    final rows = await db.query(
+      'water_log',
+      where: 'date = ?',
+      whereArgs: [date],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : WaterEntry.fromMap(rows.first);
+  }
+
+  /// 存今天的喝水紀錄（同一天覆蓋）。
+  Future<void> saveWaterLog(String date, int consumedMl, int targetMl) async {
+    final db = await database;
+    await db.insert(
+      'water_log',
+      {'date': date, 'consumed_ml': consumedMl, 'target_ml': targetMl},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// 目標是「持續性設定」而非每天重填：今天還沒存過的話，就沿用最近一次存過的目標。
+  Future<int?> getLatestWaterTarget() async {
+    final db = await database;
+    final rows = await db.query('water_log', orderBy: 'date DESC', limit: 1);
+    if (rows.isEmpty) return null;
+    return (rows.first['target_ml'] as num).toInt();
   }
 }

@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-
 import '../utils/constants.dart';
 import 'coming_soon_screen.dart';
 import 'exercise_screen.dart';
 import 'home_screen.dart';
 
-/// App 的外層骨架：三頁左右滑動（運動 / 日記 / 健身），
+/// App 的外層骨架：三頁左右滑動（運動 / 日記 / 統計），
 /// 底部一排 tab 顯示目前在哪一頁，點 tab 或滑動都能切換。
 class RootShell extends StatefulWidget {
   const RootShell({super.key});
@@ -21,6 +20,10 @@ class _RootShellState extends State<RootShell> {
 
   // 運動紀錄變動時 +1，傳給日記頁讓它重新把消耗熱量加回剩餘熱量
   int _exerciseTick = 0;
+
+  // 每次切換到「統計」頁就 +1，讓那頁的圓餅圖重新讀當天的飲食紀錄
+  // （PageView 用 children 把三頁一次建好，統計頁不會自動知道日記頁的資料變了）
+  int _diaryTick = 0;
 
   @override
   void initState() {
@@ -48,13 +51,16 @@ class _RootShellState extends State<RootShell> {
       backgroundColor: ElementColors.background,
       body: PageView(
         controller: _controller,
-        onPageChanged: (i) => setState(() => _index = i),
+        onPageChanged: (i) => setState(() {
+          _index = i;
+          if (i == 2) _diaryTick++;
+        }),
         children: [
           ExerciseScreen(
             onChanged: () => setState(() => _exerciseTick++),
           ),
           MyHomePage(title: 'Demo', exerciseTick: _exerciseTick),
-          const ComingSoonScreen(),
+          ComingSoonScreen(refreshTick: _diaryTick),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
@@ -74,8 +80,8 @@ class _RootShellState extends State<RootShell> {
             label: '日記',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.help_outline),
-            label: '健身',
+            icon: Icon(Icons.insights),
+            label: '統計',
           ),
         ],
       ),

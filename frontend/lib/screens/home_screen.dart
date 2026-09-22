@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import '../db_helper.dart';
 import '../models/food_item.dart';
 import '../models/meal_item.dart';
@@ -14,12 +13,11 @@ import '../widgets/home/week_row.dart';
 import '../widgets/meals/meal_entry.dart';
 import 'food_search_screen.dart';
 import 'onboarding_screen.dart';
+import 'water_screen.dart';
 
 class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key, required this.title, this.exerciseTick = 0});
-  final String title;
-
-  /// 由外層 RootShell 傳入，運動紀錄變動時會 +1，用來觸發重新載入消耗熱量。
+  final String title; //別的.dart要傳arg進來，故不用宣告成private
   final int exerciseTick;
 
   @override
@@ -46,8 +44,10 @@ class _MyHomePageState extends State<MyHomePage> {
     MealItem(title: '宵夜'),
     MealItem(title: '其他餐點'),
   ];
-  // 選取日期的運動消耗熱量（會加回剩餘熱量）
+
   int _burnedCalories = 0;
+  int _waterConsumedMl = 0;
+  int _waterTargetMl = 2000;
 
   // 每日熱量目標：有個人資料就用試算值，否則暫用一個保守預設值
   int get _dailyCalorieBudget => _profile?.targets.calories ?? 2000;
@@ -230,6 +230,28 @@ class _MyHomePageState extends State<MyHomePage> {
     final burned = await DBHelper.instance.getBurnedCaloriesByDate(dateStr);
     if (!mounted) return;
     setState(() => _burnedCalories = burned);
+  }
+
+  // 從 SQLite 讀取指定日期的喝水紀錄；當天還沒存過就沿用最近一次的目標
+  Future<void> _loadWaterForDate(DateTime date) async {
+    final dateStr = '${date.year}-${date.month}-${date.day}';
+    final entry = await DBHelper.instance.getWaterLog(dateStr);
+    final consumed = entry?.consumedMl ?? 0;
+    final target = entry?.targetMl ?? await DBHelper.instance.getLatestWaterTarget() ?? 2000;
+    if (!mounted) return;
+    setState(() {
+      _waterConsumedMl = consumed;
+      _waterTargetMl = target;
+    });
+  }
+
+  // 打開喝水頁；回來後重新讀一次，讓卡片上的進度即時反映
+  Future<void> _openWaterScreen() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const WaterScreen()),
+    );
+    _loadWaterForDate(_weekDates[_selectedIndex]);
   }
 
   // 從 SQLite 讀取指定日期的所有餐點明細
@@ -529,6 +551,7 @@ class _MyHomePageState extends State<MyHomePage> {
     _selectedIndex = _today.weekday - 1;
     _loadFoodLibrary(); // App 一開啟就先把餐點庫讀出來
     _loadMealsForDate(_weekDates[_selectedIndex]); // 載入今天的餐點紀錄（含運動消耗）
+    _loadWaterForDate(_weekDates[_selectedIndex]); // 載入今天的喝水紀錄
     _loadProfileThenGate(); // 載入個人資料；沒有就跳 Onboarding
   }
 
@@ -553,6 +576,7 @@ class _MyHomePageState extends State<MyHomePage> {
   void _selectDay(int index) {
     setState(() => _selectedIndex = index);
     _loadMealsForDate(_weekDates[index]);
+    _loadWaterForDate(_weekDates[index]);
   }
 
     final List<PlanItem> _samplePlans = const [
@@ -653,6 +677,7 @@ class _MyHomePageState extends State<MyHomePage> {
                           onFoodAdded: _onFoodAddedToMeal,
                           onManageFoodLibrary: _showAddFoodDialog,
                         ),
+                        _waterCard(),
                       ],
                     ),
                   ),
@@ -660,6 +685,59 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _waterCard() {
+    final progress = _waterTargetMl <= 0
+        ? 0.0
+        : (_waterConsumedMl / _waterTargetMl).clamp(0, 1).toDouble();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(15, 8, 15, 20),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: _openWaterScreen,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: ElementColors.cardBg,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.water_drop, color: ElementColors.accent, size: 32),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('水',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        minHeight: 6,
+                        backgroundColor: ElementColors.accentDim,
+                        valueColor: const AlwaysStoppedAnimation(ElementColors.accent),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text('$_waterConsumedMl / $_waterTargetMl ml',
+                        style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.chevron_right, color: Colors.white38),
+            ],
+          ),
         ),
       ),
     );
