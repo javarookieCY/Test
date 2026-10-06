@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../db_helper.dart';
 import '../models/food_item.dart';
 import '../models/meal_item.dart';
+import '../models/nutrients.dart';
 import '../models/plan_item.dart';
 import '../models/user_profile.dart';
 import '../utils/constants.dart';
@@ -69,7 +70,8 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
 
-  void _onFoodAddedToMeal(String mealTitle, String foodName, int calories, double portion) async {
+  void _onFoodAddedToMeal(String mealTitle, String foodName, int calories, double portion,
+      Nutrients nutrients) async {
     final meal = _mealItems.firstWhere((item) => item.title == mealTitle);
     final existingIdx = meal.items.indexWhere((e) => e.name == foodName);
     int calorieDiff = calories;
@@ -88,7 +90,8 @@ class _MyHomePageState extends State<MyHomePage> {
     if (portion <= 0) {
       await DBHelper.instance.deleteMealFood(dateStr, mealTitle, foodName);
     } else {
-      await DBHelper.instance.upsertMealFood(dateStr, mealTitle, foodName, calories, portion);
+      await DBHelper.instance
+          .upsertMealFood(dateStr, mealTitle, foodName, calories, portion, nutrients);
     }
 
     setState(() {
@@ -167,6 +170,7 @@ class _MyHomePageState extends State<MyHomePage> {
     if (mounted && result != null) setState(() => _profile = result);
   }
 
+  
   // 記錄今天的體重；體重會影響目標（BMR/蛋白質），所以存完重新載入 profile
   Future<void> _showLogWeightDialog() async {
     final controller = TextEditingController(
@@ -327,6 +331,8 @@ class _MyHomePageState extends State<MyHomePage> {
               protein: ref.protein ?? 0,
               carbs: ref.carbs ?? 0,
               fat: ref.fat ?? 0,
+              fiber: ref.fiber ?? 0,
+              sodium: ref.sodium ?? 0,
               description: '每 100 克｜來源：食品營養成分資料庫'
                   '${ref.category == null ? '' : '（${ref.category}）'}',
             ),
@@ -344,6 +350,8 @@ class _MyHomePageState extends State<MyHomePage> {
     final proteinController = TextEditingController(text: isEdit && foodToEdit.protein > 0 ? foodToEdit.protein.toString() : '');
     final carbsController = TextEditingController(text: isEdit && foodToEdit.carbs > 0 ? foodToEdit.carbs.toString() : '');
     final fatController = TextEditingController(text: isEdit && foodToEdit.fat > 0 ? foodToEdit.fat.toString() : '');
+    final fiberController = TextEditingController(text: isEdit && foodToEdit.fiber > 0 ? foodToEdit.fiber.toString() : '');
+    final sodiumController = TextEditingController(text: isEdit && foodToEdit.sodium > 0 ? foodToEdit.sodium.toString() : '');
 
     showDialog(
       context: context,
@@ -384,6 +392,16 @@ class _MyHomePageState extends State<MyHomePage> {
                       controller: fatController,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       decoration: const InputDecoration(labelText: '脂肪 (g)，可留空'),
+                    ),
+                    TextField(
+                      controller: fiberController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(labelText: '膳食纖維 (g)，可留空'),
+                    ),
+                    TextField(
+                      controller: sodiumController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(labelText: '鈉 (mg)，可留空'),
                     ),
                     if (errorText != null) ...[
                       const SizedBox(height: 8),
@@ -426,6 +444,11 @@ class _MyHomePageState extends State<MyHomePage> {
                             protein: double.tryParse(proteinController.text.trim()) ?? 0,
                             carbs: double.tryParse(carbsController.text.trim()) ?? 0,
                             fat: double.tryParse(fatController.text.trim()) ?? 0,
+                            fiber: double.tryParse(fiberController.text.trim()) ?? 0,
+                            sodium: double.tryParse(sodiumController.text.trim()) ?? 0,
+                            // 修改時保留原本的圖片與說明（例如「每 100 克｜來源…」）
+                            imagePath: foodToEdit?.imagePath,
+                            description: foodToEdit?.description,
                           );
 
                           final success = isEdit ? await _updateFoodInLibrary(food) : await _addFoodToLibrary(food);
@@ -707,7 +730,7 @@ class _MyHomePageState extends State<MyHomePage> {
           ),
           child: Row(
             children: [
-              const Icon(Icons.water_drop, color: ElementColors.accent, size: 32),
+              const Icon(Icons.water_drop, color: ElementColors.accent, size: 16),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(

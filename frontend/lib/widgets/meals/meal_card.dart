@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/food_item.dart';
 import '../../models/meal_item.dart';
+import '../../models/nutrients.dart';
 import '../../utils/constants.dart';
 
 class MealCard extends StatefulWidget {
@@ -18,8 +19,9 @@ class MealCard extends StatefulWidget {
   final int calories;
   final List<MealFoodRecord> items;
   final List<FoodItem> foodLibrary;
-  // 選好食物後回傳 (foodName, calories, portion)
-  final void Function(String foodName, int calories, double portion) onFoodSelected;
+  // 選好食物後回傳 (foodName, calories, portion, nutrients)；nutrients 已乘上份數
+  final void Function(String foodName, int calories, double portion, Nutrients nutrients)
+      onFoodSelected;
   final VoidCallback onManageFoodLibrary;
 
   @override
@@ -77,7 +79,8 @@ class _MealCardState extends State<MealCard> {
                 final value = int.tryParse(_manualCaloriesController.text);
                 if (value != null) {
                   final name = _manualNameController.text.trim();
-                  widget.onFoodSelected(name.isEmpty ? '自訂' : name, value, 1.0);
+                  // 手動輸入只有熱量，沒有營養素
+                  widget.onFoodSelected(name.isEmpty ? '自訂' : name, value, 1.0, Nutrients.zero);
                   _manualNameController.clear();
                   _manualCaloriesController.clear();
                 }
@@ -126,7 +129,8 @@ class _MealCardState extends State<MealCard> {
                 ElevatedButton(
                   onPressed: () {
                     final totalCalories = (food.calories * portion).round();
-                    widget.onFoodSelected(food.name, totalCalories, portion);
+                    widget.onFoodSelected(
+                        food.name, totalCalories, portion, food.nutrients.scale(portion));
                     Navigator.pop(dialogContext);
                   },
                   child: const Text('確認'),

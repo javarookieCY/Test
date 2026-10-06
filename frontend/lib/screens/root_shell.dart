@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../utils/constants.dart';
-import 'coming_soon_screen.dart';
+import 'stats_screen.dart';
 import 'exercise_screen.dart';
 import 'home_screen.dart';
 
@@ -60,7 +60,7 @@ class _RootShellState extends State<RootShell> {
             onChanged: () => setState(() => _exerciseTick++),
           ),
           MyHomePage(title: 'Demo', exerciseTick: _exerciseTick),
-          ComingSoonScreen(refreshTick: _diaryTick),
+          StatsScreen(refreshTick: _diaryTick),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(

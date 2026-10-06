@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
-
 import '../db_helper.dart';
 import '../models/user_profile.dart';
 import '../utils/constants.dart';
+import '../utils/exercise_catalog.dart';
 import '../utils/nutrition_math.dart';
+import '../utils/workout_planner.dart';
 
-/// 個人化資料設定頁。
-/// 首次開 App（還沒有 profile）時會擋在最前面；之後也可從設定重新進來修改。
-/// 送出後把資料存進 DB，並 pop 回傳新的 [UserProfile]。
+
 class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({super.key, this.initial});
+  const OnboardingScreen({super.key, this.initial, });
 
   /// 有值代表「編輯」模式，欄位會預先填好。
   final UserProfile? initial;
@@ -27,6 +26,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Sex _sex = Sex.male;
   ActivityLevel _activity = ActivityLevel.light;
   Goal _goal = Goal.maintain;
+  static const _weekdayNames = ['一', '二', '三', '四', '五', '六', '日'];
+  Set<int> _workoutWeekdays = {1, 3, 5}; // 1 = 週一 … 7 = 週日
+  Set<Equipment> _equipment = {}; // 徒手以外有的器材；空的 = 只做徒手
+  bool _applyPlan = true;
+
 
   bool _saving = false;
 
@@ -43,6 +47,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       _sex = p.sex;
       _activity = p.activity;
       _goal = p.goal;
+      _workoutWeekdays = {...p.workoutWeekdays};
+      _equipment = p.equipment.difference({Equipment.bodyweight});
     }
     // 任一欄位改動就重算下方預覽
     for (final c in [_heightCtrl, _weightCtrl, _ageCtrl]) {
@@ -75,6 +81,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
+  /// 欄位都有效時，回傳即時試算的一週計畫；否則 null。
+  WeeklyPlan? get _previewPlan {
+    if (_previewTargets == null) return null; // 沿用同一套欄位檢查
+    return buildWeeklyPlan(
+      goal: _goal,
+      workoutWeekdays: _workoutWeekdays,
+      age: int.parse(_ageCtrl.text.trim()),
+      weightKg: double.parse(_weightCtrl.text.trim()),
+      heightCm: double.parse(_heightCtrl.text.trim()),
+      equipment: _equipment,
+    );
+  }
+
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
@@ -86,10 +106,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       sex: _sex,
       activity: _activity,
       goal: _goal,
+      workoutWeekdays: _workoutWeekdays,
+      equipment: _equipment,
     );
 
     try {
       await DBHelper.instance.saveUserProfile(profile);
+
+      if (_applyPlan) {
+        final plan = buildWeeklyPlan(
+          goal: profile.goal,
+          workoutWeekdays: profile.workoutWeekdays,
+          age: profile.age,
+          weightKg: profile.weightKg,
+          heightCm: profile.heightCm,
+          equipment: profile.equipment,
+        );
+        await DBHelper.instance.applyWeeklyPlan(planToTasks(plan, DateTime.now()));
+      }
+
       if (!mounted) return;
       Navigator.pop(context, profile);
     } catch (e) {
@@ -243,8 +278,64 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               selected: {_goal},
               onSelectionChanged: (s) => setState(() => _goal = s.first),
             ),
+            
+            const SizedBox(height: 20),
+            _label('每週哪幾天運動（已選 ${_workoutWeekdays.length} 天，最多 $kMaxWorkoutDays 天）'),
+            SegmentedButton<int>(
+              style: segmentedStyleOnDark(),
+              multiSelectionEnabled: true,
+              showSelectedIcon: false,
+              segments: [
+                for (int d = 1; d <= 7; d++)
+                  ButtonSegment(value: d, label: Text(_weekdayNames[d - 1])),
+              ],
+              selected: _workoutWeekdays,
+              // 至少 1 天、最多 6 天（一定留一天休息）
+              onSelectionChanged: (s) {
+                if (s.length > kMaxWorkoutDays) return;
+                setState(() => _workoutWeekdays = s);
+              },
+            ),
+
+            const SizedBox(height: 20),
+            _label('你有哪些器材？'),
+            const Padding(
+              padding: EdgeInsets.only(bottom: 8),
+              child: Text(
+                '可複選，計畫只會排你做得到的動作；徒手動作一定會有，什麼器材都沒有就不用選。'
+                '器械 = 健身房的機器（腿推機、滑輪下拉等）',
+                style: TextStyle(color: Colors.white38, fontSize: 12, height: 1.4),
+              ),
+            ),
+            SegmentedButton<Equipment>(
+              style: segmentedStyleOnDark(),
+              multiSelectionEnabled: true,
+              emptySelectionAllowed: true,
+              segments: const [
+                ButtonSegment(value: Equipment.dumbbell, label: Text('啞鈴')),
+                ButtonSegment(value: Equipment.barbell, label: Text('槓鈴')),
+                ButtonSegment(value: Equipment.machine, label: Text('器械')),
+              ],
+              selected: _equipment,
+              onSelectionChanged: (s) => setState(() => _equipment = s),
+            ),
+
             const SizedBox(height: 24),
             _preview(),
+
+            const SizedBox(height: 16),
+            _planPreview(),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              activeThumbColor: ElementColors.accent,
+              title: const Text('儲存時套用到本週運動清單',
+                  style: TextStyle(color: Colors.white)),
+              subtitle: const Text('今天到週日、還沒打勾的清單會被這份計畫取代',
+                  style: TextStyle(color: Colors.white38, fontSize: 12)),
+              value: _applyPlan,
+              onChanged: (v) => setState(() => _applyPlan = v),
+            ),
+
             const SizedBox(height: 24),
             FilledButton(
               style: FilledButton.styleFrom(
@@ -334,6 +425,54 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
     );
   }
+
+  Widget _planPreview() {
+    final plan = _previewPlan;
+    if (plan == null) return const SizedBox.shrink();
+    const weekdays = ['一', '二', '三', '四', '五', '六', '日'];
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: ElementColors.dayBg,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('本週運動計畫', style: kGreyBoldText),
+          const SizedBox(height: 4),
+          Text('重訓每組 ${plan.repRange}',
+              style: const TextStyle(color: Colors.white54, fontSize: 12)),
+          for (final note in plan.notes)
+            Text(note,
+                style: const TextStyle(color: ElementColors.lightUi, fontSize: 12, height: 1.4)),
+          const SizedBox(height: 8),
+          for (int i = 0; i < 7; i++)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 40,
+                    child: Text('週${weekdays[i]}',
+                        style: const TextStyle(color: Colors.white54)),
+                  ),
+                  Expanded(
+                    child: Text(
+                      '${plan.days[i].type.label}：${plan.days[i].items.map((e) => e.summary).join('、')}',
+                      style: const TextStyle(color: Colors.white, height: 1.4),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
 }
 
 /// 單選清單的一列（取代已被 deprecate 的 RadioListTile group API）。

@@ -1,3 +1,5 @@
+import 'nutrients.dart';
+
 class MealFoodRecord {
   MealFoodRecord({required this.name, required this.calories, required this.portion});
   String name;
@@ -22,10 +24,11 @@ class MealItem {
   List<MealFoodRecord> items;
 }
 
-// 
+// 某一餐加入 / 修改一樣食物時的回呼；nutrients 是已乘上份數的總量
 typedef MealFoodAdded = void Function(
   String mealTitle,
   String foodName,
   int calories,
   double portion,
+  Nutrients nutrients,
 );

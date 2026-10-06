@@ -1,3 +1,5 @@
+import 'nutrients.dart';
+
 // - 餐點庫的資料模型 -
 // 代表「一種食物」的範本，例如：水煮蛋、地瓜、雞胸肉
 class FoodItem {
@@ -8,6 +10,8 @@ class FoodItem {
     this.protein = 0,
     this.carbs = 0,
     this.fat = 0,
+    this.fiber = 0,
+    this.sodium = 0,
     this.imagePath, // 圖片路徑（asset 路徑），可留空；有值才會顯示在「預設餐點」卡片牆
     this.description, // 內容物說明，例如：「大麥克 1份、可樂(中) 1杯、中薯 1份」
   });
@@ -18,8 +22,19 @@ class FoodItem {
   final double protein;
   final double carbs;
   final double fat;
+  final double fiber; // g（膳食纖維）
+  final double sodium; // mg
   final String? imagePath;
   final String? description;
+
+  /// 一份的營養素（記錄到某一餐時再乘上份數）
+  Nutrients get nutrients => Nutrients(
+        protein: protein,
+        carbs: carbs,
+        fat: fat,
+        fiber: fiber,
+        sodium: sodium,
+      );
 
   // 把物件轉成 sqflite 看得懂的 Map（給 insert 用）
   Map<String, dynamic> toMap() {
@@ -29,6 +44,8 @@ class FoodItem {
       'protein': protein,
       'carbs': carbs,
       'fat': fat,
+      'fiber': fiber,
+      'sodium': sodium,
       'image_path': imagePath,
       'description': description,
     };
@@ -43,6 +60,8 @@ class FoodItem {
       protein: (map['protein'] as num).toDouble(),
       carbs: (map['carbs'] as num).toDouble(),
       fat: (map['fat'] as num).toDouble(),
+      fiber: (map['fiber'] as num?)?.toDouble() ?? 0,
+      sodium: (map['sodium'] as num?)?.toDouble() ?? 0,
       imagePath: map['image_path'] as String?,
       description: map['description'] as String?,
     );

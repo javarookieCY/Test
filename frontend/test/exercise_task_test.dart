@@ -28,5 +28,19 @@ void main() {
       expect(restored.sets, isNull);
       expect(restored.detailLabel, '20 分鐘');
     });
+
+    test('伸展：存成 flexibility、算分鐘數；未知分類字串當重訓', () {
+      final task = ExerciseTask(
+        date: '2026-9-23',
+        category: ExerciseTaskCategory.flexibility,
+        name: '靜態伸展',
+        minutes: 10,
+      );
+      expect(task.toMap()['category'], 'flexibility');
+      final restored = ExerciseTask.fromMap({'id': 1, ...task.toMap()});
+      expect(restored.category, ExerciseTaskCategory.flexibility);
+      expect(restored.detailLabel, '10 分鐘');
+      expect(ExerciseTaskCategoryX.fromDbValue('???'), ExerciseTaskCategory.strength);
+    });
   });
 }

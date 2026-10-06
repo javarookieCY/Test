@@ -1,10 +1,18 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import '../db_helper.dart';
 import '../models/exercise_task.dart';
 import '../utils/constants.dart';
+import '../utils/exercise_catalog.dart';
+import '../widgets/common/app_list_section.dart';
+import '../widgets/exercise/amount_picker.dart';
+import '../widgets/exercise/category_badge.dart';
+import '../widgets/exercise/exercise_guide_sheet.dart';
 
-/// 設定某一天的訓練清單：選重訓或有氧，輸入動作＋組數（重訓）或
-/// 動作＋分鐘數（有氧），一筆筆加進清單；完成後回到運動頁打勾。
+/// 設定某一天的訓練清單（iOS Cupertino 風格）。
+/// 動作只能從動作庫挑（不開放自己取名），組數 / 分鐘數用滾輪選、只能選在該動作的合理範圍內。
+/// 同一個動作在同一天只會有一筆：再點一次是修改份量，不會重複加入（避免疊出 888 組）。
+/// 預設只列出使用者有器材可以做的動作（器材在個人資料設定），可以切換成顯示全部。
 class ExerciseTaskSetupScreen extends StatefulWidget {
   const ExerciseTaskSetupScreen({
     super.key,
@@ -21,11 +29,10 @@ class ExerciseTaskSetupScreen extends StatefulWidget {
 
 class _ExerciseTaskSetupScreenState extends State<ExerciseTaskSetupScreen> {
   ExerciseTaskCategory _category = ExerciseTaskCategory.strength;
-  final _nameCtrl = TextEditingController();
-  final _countCtrl = TextEditingController();
+  String _query = '';
   List<ExerciseTask> _tasks = [];
-
-  bool get _isStrength => _category == ExerciseTaskCategory.strength;
+  Set<Equipment>? _equipment; // null = 還沒填個人資料，不篩選
+  bool _onlyMyEquipment = true;
 
   @override
   void initState() {
@@ -33,37 +40,44 @@ class _ExerciseTaskSetupScreenState extends State<ExerciseTaskSetupScreen> {
     _load();
   }
 
-  @override
-  void dispose() {
-    _nameCtrl.dispose();
-    _countCtrl.dispose();
-    super.dispose();
-  }
-
   Future<void> _load() async {
     final tasks = await DBHelper.instance.getExerciseTasksByDate(widget.date);
+    final profile = await DBHelper.instance.getUserProfile();
     if (!mounted) return;
-    setState(() => _tasks = tasks);
+    setState(() {
+      _tasks = tasks;
+      _equipment = profile?.equipment;
+    });
   }
 
-  Future<void> _addTask() async {
-    final name = _nameCtrl.text.trim();
-    final count = int.tryParse(_countCtrl.text.trim());
-    if (name.isEmpty || count == null || count <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_isStrength ? '請輸入動作名稱與組數' : '請輸入動作名稱與分鐘數')),
-      );
-      return;
+  ExerciseTask? _taskFor(ExerciseDef e) =>
+      _tasks.where((t) => t.name == e.name).firstOrNull;
+
+  /// 挑好動作 → 滾輪選份量 → 新增；這天已經有這個動作就改成更新份量
+  Future<void> _pick(ExerciseDef e) async {
+    final existing = _taskFor(e);
+    final amount = await showExerciseAmountPicker(
+      context,
+      e,
+      initial: existing?.sets ?? existing?.minutes,
+      isUpdate: existing != null,
+    );
+    if (amount == null || !e.isValidAmount(amount)) return;
+
+    final sets = e.category.usesSets ? amount : null;
+    final minutes = e.category.usesSets ? null : amount;
+    if (existing?.id != null) {
+      await DBHelper.instance
+          .updateExerciseTaskAmount(existing!.id!, sets: sets, minutes: minutes);
+    } else {
+      await DBHelper.instance.insertExerciseTask(ExerciseTask(
+        date: widget.date,
+        category: e.category,
+        name: e.name,
+        sets: sets,
+        minutes: minutes,
+      ));
     }
-    await DBHelper.instance.insertExerciseTask(ExerciseTask(
-      date: widget.date,
-      category: _category,
-      name: name,
-      sets: _isStrength ? count : null,
-      minutes: _isStrength ? null : count,
-    ));
-    _nameCtrl.clear();
-    _countCtrl.clear();
     await _load();
   }
 
@@ -74,129 +88,179 @@ class _ExerciseTaskSetupScreenState extends State<ExerciseTaskSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return CupertinoPageScaffold(
       backgroundColor: ElementColors.background,
-      appBar: AppBar(
+      navigationBar: CupertinoNavigationBar(
         backgroundColor: ElementColors.background,
-        foregroundColor: Colors.white,
-        title: Text('設定${widget.dateLabel}的訓練'),
+        border: null,
+        previousPageTitle: '運動',
+        middle: Text('設定${widget.dateLabel}的訓練'),
+        trailing: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () => Navigator.pop(context),
+          child: const Text('完成', style: TextStyle(fontWeight: FontWeight.w600)),
+        ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: ElementColors.accent,
-        foregroundColor: Colors.white,
-        onPressed: () => Navigator.pop(context),
-        icon: const Icon(Icons.check),
-        label: const Text('完成，回到運動頁'),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 96),
-        children: [
-          const Text('今天要練什麼？', style: TextStyle(color: Colors.white70, fontSize: 14)),
-          const SizedBox(height: 8),
-          SegmentedButton<ExerciseTaskCategory>(
-            style: segmentedStyleOnDark(),
-            segments: const [
-              ButtonSegment(value: ExerciseTaskCategory.strength, label: Text('重訓')),
-              ButtonSegment(value: ExerciseTaskCategory.cardio, label: Text('有氧')),
-            ],
-            selected: {_category},
-            onSelectionChanged: (s) => setState(() => _category = s.first),
-          ),
-          const SizedBox(height: 20),
-          _field(
-            controller: _nameCtrl,
-            label: '動作',
-            hint: _isStrength ? '例如：深蹲' : '例如：跑步',
-          ),
-          const SizedBox(height: 12),
-          _field(
-            controller: _countCtrl,
-            label: _isStrength ? '組數' : '分鐘數',
-            hint: _isStrength ? '例如：3' : '例如：20',
-            keyboardType: TextInputType.number,
-            onSubmitted: (_) => _addTask(),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: ElementColors.accent,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
+      child: Material(
+        type: MaterialType.transparency,
+        child: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.only(bottom: 24),
+            children: [
+              _addedSection(),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                child: CupertinoSlidingSegmentedControl<ExerciseTaskCategory>(
+                  groupValue: _category,
+                  thumbColor: ElementColors.accent,
+                  backgroundColor: ElementColors.cardBg,
+                  children: {
+                    for (final c in ExerciseTaskCategory.values)
+                      c: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Text(c.label, style: const TextStyle(color: Colors.white)),
+                      ),
+                  },
+                  onValueChanged: (c) {
+                    if (c != null) setState(() => _category = c);
+                  },
+                ),
               ),
-              onPressed: _addTask,
-              icon: const Icon(Icons.add),
-              label: const Text('加入清單'),
-            ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+                child: CupertinoSearchTextField(
+                  placeholder: '搜尋動作，例如：深蹲、Squat、胸',
+                  style: const TextStyle(color: Colors.white),
+                  backgroundColor: ElementColors.cardBg,
+                  onChanged: (v) => setState(() => _query = v),
+                ),
+              ),
+              if (_equipment != null) _equipmentFilter(),
+              ..._catalogSections(),
+            ],
           ),
-          const SizedBox(height: 28),
-          Text('已加入（${_tasks.length}）', style: kGreyBoldText),
-          const SizedBox(height: 8),
-          if (_tasks.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Text('還沒加入動作，填好上面的表單後點「加入清單」',
-                  style: TextStyle(color: Colors.white38)),
-            )
-          else
-            ..._tasks.map(_taskRow),
+        ),
+      ),
+    );
+  }
+
+  Widget _addedSection() {
+    return AppListSection(
+      header: Text('${widget.dateLabel}已加入（${_tasks.length}）'),
+      footer: const Text('點動作可以修改組數 / 分鐘數'),
+      children: _tasks.isEmpty
+          ? [
+              const CupertinoListTile(
+                title: Text('還沒加入動作，從下方動作庫挑選',
+                    style: TextStyle(color: Colors.white38, fontSize: 15)),
+              ),
+            ]
+          : _tasks.map(_addedTile).toList(),
+    );
+  }
+
+  Widget _addedTile(ExerciseTask task) {
+    final def = findExercise(task.name);
+    return CupertinoListTile(
+      leading: CategoryIconTile(task.category),
+      title: Text(task.name),
+      additionalInfo: Text(task.detailLabel),
+      onTap: def == null ? null : () => _pick(def),
+      trailing: CupertinoButton(
+        padding: EdgeInsets.zero,
+        minimumSize: const Size(32, 32),
+        onPressed: task.id == null ? null : () => _removeTask(task.id!),
+        child: const Icon(CupertinoIcons.minus_circle_fill,
+            color: CupertinoColors.systemRed, size: 22),
+      ),
+    );
+  }
+
+  Widget _equipmentFilter() {
+    final names = [
+      for (final e in Equipment.values)
+        if (_equipment!.contains(e)) e.label
+    ].join('、');
+    return AppListSection(
+      hasLeading: false,
+      children: [
+        CupertinoListTile(
+          title: const Text('只顯示我有器材的動作'),
+          subtitle: Text('$names（在個人資料修改）'),
+          trailing: CupertinoSwitch(
+            value: _onlyMyEquipment,
+            activeTrackColor: ElementColors.accent,
+            onChanged: (v) => setState(() => _onlyMyEquipment = v),
+          ),
+        ),
+      ],
+    );
+  }
+
+  List<Widget> _catalogSections() {
+    final results = searchCatalog(_query, _category,
+        equipment: _onlyMyEquipment ? _equipment : null);
+    if (results.isEmpty) {
+      return [
+        AppListSection(
+          hasLeading: false,
+          footer: Text(_onlyMyEquipment && _equipment != null
+              ? '目前只顯示你有器材的動作，可以關掉上面的開關看全部'
+              : '動作庫只收錄常見的標準動作，換個關鍵字試試'),
+          children: [
+            CupertinoListTile(
+              title: Text('找不到「${_query.trim()}」',
+                  style: const TextStyle(color: Colors.white54, fontSize: 15)),
+            ),
+          ],
+        ),
+      ];
+    }
+    if (_category != ExerciseTaskCategory.strength) {
+      return [
+        AppListSection(
+          header: Text('${_category.label}動作'),
+          children: results.map(_catalogTile).toList(),
+        ),
+      ];
+    }
+    // 重訓依部位分組
+    return [
+      for (final part in BodyPart.values)
+        if (results.any((e) => e.bodyPart == part))
+          AppListSection(
+            header: Text(part.label),
+            children:
+                results.where((e) => e.bodyPart == part).map(_catalogTile).toList(),
+          ),
+    ];
+  }
+
+  Widget _catalogTile(ExerciseDef e) {
+    final added = _taskFor(e);
+    return CupertinoListTile(
+      leading: CategoryIconTile(e.category),
+      title: Text(e.name),
+      subtitle: Text(e.subtitle),
+      additionalInfo: added == null ? null : Text(added.detailLabel),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CupertinoButton(
+            padding: EdgeInsets.zero,
+            minimumSize: const Size(36, 36),
+            onPressed: () => showExerciseGuide(context, e),
+            child: const Icon(CupertinoIcons.info_circle, color: Colors.white54, size: 22),
+          ),
+          const SizedBox(width: 4),
+          Icon(
+            added == null ? CupertinoIcons.add_circled : CupertinoIcons.checkmark_circle_fill,
+            color: categoryColor(e.category),
+            size: 22,
+          ),
         ],
       ),
-    );
-  }
-
-  Widget _field({
-    required TextEditingController controller,
-    required String label,
-    required String hint,
-    TextInputType? keyboardType,
-    ValueChanged<String>? onSubmitted,
-  }) {
-    return TextField(
-      controller: controller,
-      keyboardType: keyboardType,
-      style: const TextStyle(color: Colors.white),
-      onSubmitted: onSubmitted,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        labelStyle: const TextStyle(color: Colors.white54),
-        hintStyle: const TextStyle(color: Colors.white24),
-        filled: true,
-        fillColor: ElementColors.cardBg,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide.none,
-        ),
-      ),
-    );
-  }
-
-  Widget _taskRow(ExerciseTask task) {
-    final color =
-        task.category == ExerciseTaskCategory.strength ? ElementColors.accent : ElementColors.cardio;
-    return Card(
-      color: ElementColors.cardBg,
-      margin: const EdgeInsets.only(bottom: 6),
-      child: ListTile(
-        leading: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.2),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: color),
-          ),
-          child: Text(task.category.label, style: TextStyle(color: color, fontSize: 11)),
-        ),
-        title: Text(task.name, style: const TextStyle(color: Colors.white)),
-        subtitle: Text(task.detailLabel,
-            style: const TextStyle(color: Colors.white54, fontSize: 12)),
-        trailing: IconButton(
-          icon: const Icon(Icons.delete_outline, color: Colors.white38),
-          onPressed: task.id == null ? null : () => _removeTask(task.id!),
-        ),
-      ),
+      onTap: () => _pick(e),
     );
   }
 }

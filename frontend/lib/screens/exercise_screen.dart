@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import '../utils/chart.dart';
 import '../db_helper.dart';
@@ -5,15 +6,16 @@ import '../models/exercise_entry.dart';
 import '../models/exercise_task.dart';
 import '../models/user_profile.dart';
 import '../utils/constants.dart';
+import '../utils/exercise_catalog.dart';
 import '../utils/exercise_data.dart';
+import '../widgets/exercise/category_badge.dart';
 import '../widgets/home/week_row.dart';
 import 'exercise_task_setup_screen.dart';
+import 'weekly_plan_screen.dart';
 
 class ExerciseScreen extends StatefulWidget {
   const ExerciseScreen({super.key, this.onChanged});
-
   final VoidCallback? onChanged;
-
   @override
   State<ExerciseScreen> createState() => _ExerciseScreenState();
 }
@@ -85,7 +87,7 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
   Future<void> _openTaskSetup() async {
     await Navigator.push(
       context,
-      MaterialPageRoute(
+      CupertinoPageRoute(
         builder: (_) => ExerciseTaskSetupScreen(
           date: _selectedDateStr,
           dateLabel: _selectedDateLabel,
@@ -95,16 +97,44 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
     await _load();
   }
 
+  /// 打開「本週計畫」；在那頁按下套用會回傳 true，這邊重新讀清單
+  Future<void> _openWeeklyPlan() async {
+    final profile = _profile;
+    if (profile == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('請先到「日記」頁填寫個人資料，才能排出計畫')),
+      );
+      return;
+    }
+    final applied = await Navigator.push<bool>(
+      context,
+      CupertinoPageRoute(builder: (_) => WeeklyPlanScreen(profile: profile)),
+    );
+    await _load();
+    if (applied == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已把本週計畫套用到訓練清單')),
+      );
+    }
+  }
+
   /// 撈「最近 7 天（含今天）」每天的運動消耗熱量，組成折線圖要的資料。
-  /// 用 DBHelper 既有的 getBurnedCaloriesByDate 逐日查詢，沒紀錄的那天會是 0。
+  /// 每天 = 運動紀錄的熱量 + 訓練清單裡「已打勾」動作的估計熱量（MET × 體重 × 時間），
+  /// 沒紀錄的那天會是 0。
   Future<void> _loadWeeklyTrend() async {
     const days = 7;
     final now = DateTime.now();
+    final weightKg = (await DBHelper.instance.getUserProfile())?.weightKg;
     final values = <double>[];
     final labels = <String>[];
     for (int i = days - 1; i >= 0; i--) {
-      final d = now.subtract(Duration(days: i));
-      final kcal = await DBHelper.instance.getBurnedCaloriesByDate(_dateKey(d));
+      final d = DateTime(now.year, now.month, now.day - i);
+      final recorded = await DBHelper.instance.getBurnedCaloriesByDate(_dateKey(d));
+      final tasks = await DBHelper.instance.getExerciseTasksByDate(_dateKey(d));
+      final fromTasks = tasks
+          .where((t) => t.done)
+          .fold(0, (sum, t) => sum + estimateTaskKcal(t, weightKg: weightKg));
+      final kcal = recorded + fromTasks;
       values.add(kcal.toDouble());
       labels.add('${d.month}/${d.day}');
     }
@@ -147,6 +177,19 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
         foregroundColor: Colors.white,
         title: const Text('運動'),
         automaticallyImplyLeading: false,
+        actions: [
+          CupertinoButton(
+            onPressed: _openWeeklyPlan,
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(CupertinoIcons.calendar, size: 20, color: ElementColors.lightUi),
+                SizedBox(width: 4),
+                Text('本週計畫', style: TextStyle(color: ElementColors.lightUi)),
+              ],
+            ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: ElementColors.accent,
@@ -188,7 +231,7 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
           else
             ..._entries.map(_entryTile),
           const SizedBox(height: 24),
-          const Text('近 7 天消耗熱量', style: kGreyBoldText),
+          const Text('近 7 天消耗熱量（運動紀錄＋已打勾的訓練清單）', style: kGreyBoldText),
           const SizedBox(height: 8),
           _weeklyTrendChart(),
         ],
@@ -241,10 +284,11 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
   }
 
   Widget _taskRatioBar() {
-    final strengthCount =
-        _tasks.where((t) => t.category == ExerciseTaskCategory.strength).length;
-    final cardioCount = _tasks.length - strengthCount;
-    final total = _tasks.length;
+    final counts = {
+      for (final c in ExerciseTaskCategory.values)
+        c: _tasks.where((t) => t.category == c).length,
+    };
+    final present = counts.entries.where((e) => e.value > 0).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -254,23 +298,20 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
             height: 8,
             child: Row(
               children: [
-                if (strengthCount > 0)
+                for (int i = 0; i < present.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 2), // 段與段之間留 2px 縫
                   Expanded(
-                    flex: strengthCount,
-                    child: Container(color: ElementColors.accent),
+                    flex: present[i].value,
+                    child: Container(color: categoryColor(present[i].key)),
                   ),
-                if (cardioCount > 0)
-                  Expanded(
-                    flex: cardioCount,
-                    child: Container(color: ElementColors.cardio),
-                  ),
+                ],
               ],
             ),
           ),
         ),
         const SizedBox(height: 4),
         Text(
-          '重訓 $strengthCount 項・有氧 $cardioCount 項（共 $total 項）',
+          '${present.map((e) => '${e.key.label} ${e.value} 項').join('・')}（共 ${_tasks.length} 項）',
           style: const TextStyle(color: Colors.white54, fontSize: 12),
         ),
       ],
@@ -289,8 +330,6 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
   }
 
   Widget _taskTile(ExerciseTask task) {
-    final color =
-        task.category == ExerciseTaskCategory.strength ? ElementColors.accent : ElementColors.cardio;
     return Card(
       color: ElementColors.cardBg,
       margin: const EdgeInsets.only(bottom: 6),
@@ -313,16 +352,7 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
         secondary: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: color),
-              ),
-              child: Text(task.category.label,
-                  style: TextStyle(color: color, fontSize: 11)),
-            ),
+            CategoryBadge(task.category),
             IconButton(
               icon: const Icon(Icons.delete_outline, color: Colors.white38, size: 20),
               onPressed: task.id == null ? null : () => _deleteTask(task.id!),
@@ -380,6 +410,7 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
     final minutesCtrl = TextEditingController(text: '30');
     final kcalCtrl = TextEditingController();
     bool kcalEditedManually = false;
+    String? minutesError;
 
     void recalc(StateSetter setDialogState) {
       if (kcalEditedManually) {
@@ -464,11 +495,15 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
                       controller: minutesCtrl,
                       keyboardType: TextInputType.number,
                       style: const TextStyle(color: Colors.white),
-                      decoration: const InputDecoration(
-                        labelText: '時長（分鐘）',
-                        labelStyle: TextStyle(color: Colors.white54),
+                      decoration: InputDecoration(
+                        labelText: '時長（分鐘，1–$kMaxExerciseMinutes）',
+                        labelStyle: const TextStyle(color: Colors.white54),
+                        errorText: minutesError,
                       ),
-                      onChanged: (_) => recalc(setDialogState),
+                      onChanged: (_) {
+                        minutesError = null;
+                        recalc(setDialogState);
+                      },
                     ),
                     TextField(
                       controller: kcalCtrl,
@@ -501,7 +536,12 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
                   onPressed: () {
                     final mins = int.tryParse(minutesCtrl.text.trim());
                     final kcal = int.tryParse(kcalCtrl.text.trim());
-                    if (mins == null || mins <= 0 || kcal == null || kcal < 0) return;
+                    if (mins == null || mins <= 0 || mins > kMaxExerciseMinutes) {
+                      setDialogState(
+                          () => minutesError = '請輸入 1–$kMaxExerciseMinutes 分鐘');
+                      return;
+                    }
+                    if (kcal == null || kcal < 0) return;
                     Navigator.pop(dialogContext);
                     _addEntry(ExerciseEntry(
                       date: _selectedDateStr,

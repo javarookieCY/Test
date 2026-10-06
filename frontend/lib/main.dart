@@ -1,4 +1,5 @@
 import 'package:device_preview/device_preview.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'screens/root_shell.dart';
 import 'utils/constants.dart';
@@ -28,6 +29,13 @@ class MyApp extends StatelessWidget {
           seedColor: ElementColors.accent,
           brightness: Brightness.dark,
         ),
+        // 沒特別指定顏色的文字一律白色（Material 與 Cupertino 元件都是）
+        textTheme: Typography.material2021().white.apply(
+              bodyColor: Colors.white,
+              displayColor: Colors.white,
+            ),
+        // iOS 風格元件固定用深色模式：預設文字（label 色）就是白色，字型維持系統字型
+        cupertinoOverrideTheme: const CupertinoThemeData(brightness: Brightness.dark),
       ),
       home: const RootShell(),
     );

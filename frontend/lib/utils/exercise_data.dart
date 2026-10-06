@@ -82,6 +82,9 @@ const kExercisePresets = <ExercisePreset>[
   ]),
 ];
 
+/// 單筆運動紀錄的時長上限（分鐘）：超過 5 小時多半是打錯字
+const kMaxExerciseMinutes = 300;
+
 /// 熱量估算：kcal ≈ MET × 體重(kg) × 時間(小時)。
 /// 沒有體重資料時用 60kg 當預設。
 int estimateExerciseKcal({

@@ -1,4 +1,6 @@
+import '../utils/exercise_catalog.dart';
 import '../utils/nutrition_math.dart';
+import '../utils/workout_planner.dart';
 
 /// 使用者個人資料（DB 只存一列，id 固定為 1）。
 /// Onboarding 時建立，之後可在設定頁修改。
@@ -10,7 +12,9 @@ class UserProfile {
     required this.sex,
     required this.activity,
     required this.goal,
-  });
+    this.workoutWeekdays = const {1, 3, 5},
+    Set<Equipment> equipment = const {Equipment.dumbbell},
+  }) : equipment = {Equipment.bodyweight, ...equipment};
 
   final double heightCm;
   final double weightKg; // 最近一次體重（也會寫進 weight_log）
@@ -18,6 +22,12 @@ class UserProfile {
   final Sex sex;
   final ActivityLevel activity;
   final Goal goal;
+  final Set<int> workoutWeekdays; // 每週哪幾天運動（1 = 週一 … 7 = 週日），最多 6 天
+
+  int get workoutDays => workoutWeekdays.length;
+
+  /// 有哪些器材可以用（一定包含徒手），排計畫和挑動作都只用這些器材
+  final Set<Equipment> equipment;
 
   /// 依目前資料算出的每日熱量與三大營養素目標
   NutritionTargets get targets => computeTargets(
@@ -36,6 +46,8 @@ class UserProfile {
     Sex? sex,
     ActivityLevel? activity,
     Goal? goal,
+    Set<int>? workoutWeekdays,
+    Set<Equipment>? equipment,
   }) {
     return UserProfile(
       heightCm: heightCm ?? this.heightCm,
@@ -44,6 +56,8 @@ class UserProfile {
       sex: sex ?? this.sex,
       activity: activity ?? this.activity,
       goal: goal ?? this.goal,
+      workoutWeekdays: workoutWeekdays ?? this.workoutWeekdays,
+      equipment: equipment ?? this.equipment,
     );
   }
 
@@ -55,6 +69,13 @@ class UserProfile {
         'sex': sex.name,
         'activity_level': activity.name,
         'goal': goal.name,
+        'workout_days': workoutDays,
+        'workout_weekdays': (workoutWeekdays.toList()..sort()).join(','),
+        // 依 enum 順序存成逗號分隔，例如 "bodyweight,dumbbell"
+        'equipment': [
+          for (final e in Equipment.values)
+            if (equipment.contains(e)) e.name
+        ].join(','),
       };
 
   factory UserProfile.fromMap(Map<String, dynamic> map) {
@@ -65,6 +86,19 @@ class UserProfile {
       sex: Sex.values.byName(map['sex'] as String),
       activity: ActivityLevel.values.byName(map['activity_level'] as String),
       goal: Goal.values.byName(map['goal'] as String),
+      // 版本 14 以前只存天數：用預設的運動日分配
+      workoutWeekdays: map['workout_weekdays'] == null
+          ? defaultWorkoutWeekdays((map['workout_days'] as num?)?.toInt() ?? 3)
+          : {
+              for (final d in (map['workout_weekdays'] as String).split(','))
+                if (d.isNotEmpty) int.parse(d)
+            },
+      equipment: map['equipment'] == null
+          ? const {Equipment.dumbbell}
+          : {
+              for (final name in (map['equipment'] as String).split(','))
+                if (name.isNotEmpty) Equipment.values.byName(name)
+            },
     );
   }
 }

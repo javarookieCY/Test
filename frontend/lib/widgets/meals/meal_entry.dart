@@ -29,8 +29,8 @@ class MealEntry extends StatelessWidget {
               items: meal.items,
               foodLibrary: foodLibrary,
               onManageFoodLibrary: onManageFoodLibrary,
-              onFoodSelected: (foodName, calories, portion) =>
-                  onFoodAdded(meal.title, foodName, calories, portion),
+              onFoodSelected: (foodName, calories, portion, nutrients) =>
+                  onFoodAdded(meal.title, foodName, calories, portion, nutrients),
             ),
           )
           .toList(),

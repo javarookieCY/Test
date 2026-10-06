@@ -19,6 +19,12 @@ class ElementColors {
   // 有氧專用強調色（跟 accent 的重訓藍做區隔，例如訓練清單的比例條）
   static const cardio = Color(0xFFE8A33D);
 
+  // 伸展專用強調色（跟重訓藍、有氧橘做區隔）
+  static const flexibility = Color(0xFF5BBF8A);
+
+  // 超標 / 超過上限（熱量、鈉）用
+  static const warning = Color(0xFFE66767);
+
   static const dayBg = Color.fromARGB(100, 116, 116, 116);
   static const dayBorder = Color.fromARGB(255, 179, 179, 179);
 }

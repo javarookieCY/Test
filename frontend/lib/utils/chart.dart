@@ -177,6 +177,8 @@ class _LineChartSample2State extends State<LineChartSample2> {
         LineChartBarData(
           spots: _spots,
           isCurved: true,
+          // 曲線平滑時不要衝過資料點（不然 0 附近會畫到負值以下）
+          preventCurveOverShooting: true,
           gradient: LinearGradient(
             colors: gradientColors,
           ),
@@ -265,6 +267,8 @@ class _LineChartSample2State extends State<LineChartSample2> {
         LineChartBarData(
           spots: avgSpots,
           isCurved: true,
+          // 曲線平滑時不要衝過資料點（不然 0 附近會畫到負值以下）
+          preventCurveOverShooting: true,
           gradient: LinearGradient(
             colors: [
               ColorTween(begin: gradientColors[0], end: gradientColors[1])

@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint, visibleForTesting;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path/path.dart';
@@ -9,8 +9,10 @@ import 'models/exercise_entry.dart';
 import 'models/exercise_task.dart';
 import 'models/food_item.dart';
 import 'models/food_ref_item.dart';
+import 'models/nutrients.dart';
 import 'models/user_profile.dart';
 import 'models/water_entry.dart';
+import 'utils/exercise_catalog.dart';
 
 class DBHelper {
   DBHelper._();
@@ -38,15 +40,21 @@ class DBHelper {
     _factoryInitialized = true;
   }
 
-  Future<Database> _initDB() async {
+  /// 測試用：改開指定路徑的資料庫（例如 inMemoryDatabasePath），不會動到 App 自己的 meals.db。
+  @visibleForTesting
+  Future<void> openForTest(String path) async {
+    await _db?.close();
+    _db = await _initDB(path: path);
+  }
+
+  Future<Database> _initDB({String? path}) async {
     _ensureFactoryInitialized();
 
-    final dbPath = await getDatabasesPath();
-    final path = join(dbPath, 'meals.db');
+    path ??= join(await getDatabasesPath(), 'meals.db');
 
     final db = await openDatabase(
       path,
-      version: 10,
+      version: 14,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE meals (
@@ -86,8 +94,12 @@ class DBHelper {
         await db.execute(_createWaterLogSql);
         await db.execute(_createExerciseTasksSql);
         await _addExerciseTaskDetailColumns(db);
+        await _addWorkoutDaysColumn(db);
+        await _addNutrientColumns(db);
+        await _addEquipmentColumn(db);
+        await _addWorkoutWeekdaysColumn(db);
       },
-      
+
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await db.execute('''
@@ -137,6 +149,20 @@ class DBHelper {
         }
         if (oldVersion < 10) {
           await _addExerciseTaskDetailColumns(db);
+        }
+        if (oldVersion < 11) {
+          await _addWorkoutDaysColumn(db);
+        }
+        if (oldVersion < 12) {
+          await _addNutrientColumns(db);
+          await _backfillMealFoodNutrients(db);
+        }
+        if (oldVersion < 13) {
+          await _addEquipmentColumn(db);
+          await _deleteTasksNotInCatalog(db);
+        }
+        if (oldVersion < 14) {
+          await _addWorkoutWeekdaysColumn(db);
         }
       },
     );
@@ -220,6 +246,52 @@ class DBHelper {
     await db.execute('ALTER TABLE exercise_tasks ADD COLUMN minutes INTEGER');
   }
 
+  Future<void> _addWorkoutDaysColumn(Database db) async {
+    await db.execute('ALTER TABLE user_profile ADD COLUMN workout_days INTEGER NOT NULL DEFAULT 3');
+  }
+
+  /// 版本 12：餐點庫多記纖維 / 鈉，飲食紀錄多記五種營養素（已乘上份數），
+  /// 統計頁才有熱量以外的數字可以加總。
+  Future<void> _addNutrientColumns(Database db) async {
+    for (final col in ['fiber', 'sodium']) {
+      await db.execute('ALTER TABLE foods ADD COLUMN $col REAL NOT NULL DEFAULT 0');
+    }
+    for (final col in ['protein', 'carbs', 'fat', 'fiber', 'sodium']) {
+      await db.execute('ALTER TABLE meal_foods ADD COLUMN $col REAL NOT NULL DEFAULT 0');
+    }
+  }
+
+  /// 升級前的飲食紀錄沒有營養素：用「同名的餐點庫食物 × 份數」盡量補回去。
+  /// 找不到同名食物的（例如手動輸入熱量）維持 0。
+  /// 版本 13：個人資料記「有哪些器材」。舊資料預設徒手 + 啞鈴（升級前的計畫就是用這兩種排的）。
+  Future<void> _addEquipmentColumn(Database db) async {
+    await db.execute(
+        "ALTER TABLE user_profile ADD COLUMN equipment TEXT NOT NULL DEFAULT 'bodyweight,dumbbell'");
+  }
+
+  /// 版本 14：個人資料記「每週哪幾天運動」（例如 "1,3,5"）。
+  /// 舊資料是 null，讀出來時依原本的每週天數給預設的運動日。
+  Future<void> _addWorkoutWeekdaysColumn(Database db) async {
+    await db.execute('ALTER TABLE user_profile ADD COLUMN workout_weekdays TEXT');
+  }
+
+  /// 版本 13：訓練清單改成只能從動作庫挑，以前自己取名的動作整筆刪掉。
+  Future<void> _deleteTasksNotInCatalog(Database db) async {
+    final names = kExerciseCatalog.map((e) => e.name).toList();
+    final marks = List.filled(names.length, '?').join(', ');
+    await db.delete('exercise_tasks', where: 'name NOT IN ($marks)', whereArgs: names);
+  }
+
+  Future<void> _backfillMealFoodNutrients(Database db) async {
+    String perPortion(String col) =>
+        '$col = portion * (SELECT f.$col FROM foods f '
+        'WHERE f.name = meal_foods.food_name ORDER BY f.id LIMIT 1)';
+    await db.execute('''
+      UPDATE meal_foods SET ${['protein', 'carbs', 'fat'].map(perPortion).join(', ')}
+      WHERE EXISTS (SELECT 1 FROM foods f WHERE f.name = meal_foods.food_name)
+    ''');
+  }
+
   Future<void> _seedFoodRefIfEmpty(Database db) async {
     final rows = await db.rawQuery('SELECT COUNT(*) AS c FROM food_ref');
     final count = (rows.first['c'] as int?) ?? 0;
@@ -280,7 +352,9 @@ class DBHelper {
   }
 
   // ---------- meal_foods：詳細餐點紀錄 ----------
-  Future<int> upsertMealFood(String date, String mealTitle, String foodName, int calories, double portion) async {
+  /// [nutrients] 是這筆紀錄的總量（已乘上份數），手動輸入熱量的傳 Nutrients.zero。
+  Future<int> upsertMealFood(String date, String mealTitle, String foodName, int calories,
+      double portion, Nutrients nutrients) async {
     final db = await database;
     return db.insert('meal_foods', {
       'date': date,
@@ -288,6 +362,7 @@ class DBHelper {
       'food_name': foodName,
       'calories': calories,
       'portion': portion,
+      ...nutrients.toMap(),
     }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
@@ -301,6 +376,14 @@ class DBHelper {
   Future<List<Map<String, dynamic>>> getMealFoodsByDate(String date) async {
     final db = await database;
     return db.query('meal_foods', where: 'date = ?', whereArgs: [date]);
+  }
+
+  /// 一次撈多天的飲食明細（統計頁「一週」用）。日期字串不是補零格式，不能用 BETWEEN，改用 IN。
+  Future<List<Map<String, dynamic>>> getMealFoodsByDates(List<String> dates) async {
+    if (dates.isEmpty) return const [];
+    final db = await database;
+    final marks = List.filled(dates.length, '?').join(', ');
+    return db.query('meal_foods', where: 'date IN ($marks)', whereArgs: dates);
   }
 
   // ---------- food_ref：TFDA 食品營養成分參考庫（唯讀） ----------
@@ -363,6 +446,19 @@ class DBHelper {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
     await logWeight(_todayStr(), profile.weightKg);
+  }
+
+  /// 只改每週運動日（本週計畫頁點圓圈時用），不像 saveUserProfile 會順便記一筆體重。
+  Future<void> updateWorkoutWeekdays(Set<int> weekdays) async {
+    final db = await database;
+    await db.update(
+      'user_profile',
+      {
+        'workout_days': weekdays.length,
+        'workout_weekdays': (weekdays.toList()..sort()).join(','),
+      },
+      where: 'id = 1',
+    );
   }
 
   // ---------- weight_log：體重紀錄 ----------
@@ -437,14 +533,14 @@ class DBHelper {
     return db.insert('exercise_tasks', task.toMap());
   }
 
-  /// 依「重訓排前面、有氧排後面」排序，同分類內依新增順序排列。
+  /// 依「重訓 → 有氧 → 伸展」排序，同分類內依新增順序排列。
   Future<List<ExerciseTask>> getExerciseTasksByDate(String date) async {
     final db = await database;
     final rows = await db.query(
       'exercise_tasks',
       where: 'date = ?',
       whereArgs: [date],
-      orderBy: "CASE category WHEN 'cardio' THEN 1 ELSE 0 END, id ASC",
+      orderBy: "CASE category WHEN 'cardio' THEN 1 WHEN 'flexibility' THEN 2 ELSE 0 END, id ASC",
     );
     return rows.map(ExerciseTask.fromMap).toList();
   }
@@ -464,6 +560,47 @@ class DBHelper {
     return db.delete('exercise_tasks', where: 'id = ?', whereArgs: [id]);
   }
 
+  /// 修改清單裡某個動作的組數（重訓）或分鐘數（有氧 / 伸展）。
+  Future<int> updateExerciseTaskAmount(int id, {int? sets, int? minutes}) async {
+    final db = await database;
+    return db.update(
+      'exercise_tasks',
+      {'sets': sets, 'minutes': minutes},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  /// 把自動產生的運動計畫寫進 exercise_tasks。
+  /// [tasksByDate] 的 key 是日期 (yyyy-M-d)。已經有打勾任務的那天整天跳過，
+  /// 其餘日期先清空再寫入，避免跟舊清單重複。
+  Future<void> applyWeeklyPlan(Map<String, List<ExerciseTask>> tasksByDate) async {
+    final db = await database;
+    await db.transaction((txn) async{
+      for(final entry in tasksByDate.entries) {
+        final date = entry.key;
+
+        final doneRows = await txn.query(
+          'exercise_tasks',
+          where: 'date = ? AND done = 1',
+          whereArgs: [date],
+          limit: 1,
+        );
+
+        if(doneRows.isNotEmpty) continue;
+        
+        await txn.delete(
+          'exercise_tasks',
+          where: 'date = ?',
+          whereArgs: [date]
+        );
+
+        for(final task in entry.value) {
+          await txn.insert('exercise_tasks', task.toMap());
+        }
+      }
+    },);
+  }
   // ---------- water_log：喝水紀錄 ----------
   Future<WaterEntry?> getWaterLog(String date) async {
     final db = await database;
