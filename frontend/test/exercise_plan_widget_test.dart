@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flutter_application_1/db_helper.dart';
 import 'package:flutter_application_1/models/user_profile.dart';
+import 'package:flutter_application_1/screens/exercise_screen.dart';
 import 'package:flutter_application_1/screens/exercise_task_setup_screen.dart';
 import 'package:flutter_application_1/screens/weekly_plan_screen.dart';
 import 'package:flutter_application_1/utils/exercise_catalog.dart';
@@ -217,6 +218,41 @@ void main() {
       final tasks = await tester
           .runAsync(() => DBHelper.instance.getExerciseTasksByDate('2026-10-7'));
       expect(tasks!.single.sets, 5);
+    });
+  });
+
+  group('運動頁開設定頁', () {
+    testWidgets('資料還在讀就點「新增動作」：讀完不會再自動疊一層設定頁', (tester) async {
+      _phoneSize(tester);
+      await tester.pumpWidget(const MaterialApp(home: ExerciseScreen()));
+      await tester.tap(find.byTooltip('新增動作')); // DB 還沒讀完，這天也還沒有清單
+      await tester.pump();
+      await _settleDb(tester);
+      await tester.pumpAndSettle();
+      expect(find.byType(ExerciseTaskSetupScreen, skipOffstage: false), findsOneWidget);
+
+      await tester.tap(find.byType(CupertinoNavigationBarBackButton));
+      await tester.pumpAndSettle();
+      await _settleDb(tester);
+      expect(find.byType(ExerciseTaskSetupScreen, skipOffstage: false), findsNothing);
+      expect(find.text('運動'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 10)); // 把頁面上還沒到期的計時器跑完
+    });
+
+    testWidgets('開設定頁時底下的頁面不會被換上別種轉場（避免整頁被搬位置、DevicePreview 下卡死）',
+        (tester) async {
+      _phoneSize(tester);
+      await tester.pumpWidget(const MaterialApp(home: ExerciseScreen()));
+      await _settleDb(tester);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('新增動作'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100)); // 轉場進行中
+      final below = ModalRoute.of(tester.element(find.byType(ExerciseScreen, skipOffstage: false)))!;
+      expect(below.receivedTransition, isNull);
+      await tester.pumpAndSettle();
+      await _settleDb(tester);
+      await tester.pump(const Duration(seconds: 10));
     });
   });
 

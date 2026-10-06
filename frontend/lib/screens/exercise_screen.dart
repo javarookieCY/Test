@@ -66,8 +66,10 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
   /// 切換日期 / 剛進頁面時用：讀完資料後，如果這天還沒設定訓練清單，
   /// 就直接跳出設定頁引導使用者輸入。
   Future<void> _loadForDay() async {
+    final index = _selectedIndex;
     await _load();
-    if (!mounted || _tasks.isNotEmpty) return;
+    // 讀資料期間使用者又切到別天，就不要替舊的那天跳設定頁
+    if (!mounted || index != _selectedIndex || _tasks.isNotEmpty) return;
     await _openTaskSetup();
   }
 
@@ -84,16 +86,32 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
     });
   }
 
+  /// 設定頁已經開著：資料還在讀的時候使用者先點了「新增動作」，讀完又自動跳一次會疊出兩層設定頁
+  bool _setupOpen = false;
+
+  // 換頁一律用 MaterialPageRoute，不要用 CupertinoPageRoute：
+  // 底下的 RootShell 是 MaterialPageRoute，上面疊 CupertinoPageRoute 時兩者轉場不同，
+  // 底下那頁會套上 Cupertino 的「被推走」轉場，整頁（GlobalKey）在元件樹裡被搬位置；
+  // 再加上 DevicePreview 把整個 App 包在 LayoutBuilder 裡，搬移發生在 layout 階段，
+  // 頁面上的 OverlayPortal（Tooltip 等）就會丟出 "mutated in _RenderLayoutBuilder.performLayout"，
+  // 返回時元件樹已經壞掉 → '_elements.contains(element)' → 畫面卡死。
+  // MaterialPageRoute 會依平台（含 DevicePreview 模擬的 iPhone）自動用 iOS 滑動轉場，外觀不變。
   Future<void> _openTaskSetup() async {
-    await Navigator.push(
-      context,
-      CupertinoPageRoute(
-        builder: (_) => ExerciseTaskSetupScreen(
-          date: _selectedDateStr,
-          dateLabel: _selectedDateLabel,
+    if (_setupOpen) return;
+    _setupOpen = true;
+    try {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ExerciseTaskSetupScreen(
+            date: _selectedDateStr,
+            dateLabel: _selectedDateLabel,
+          ),
         ),
-      ),
-    );
+      );
+    } finally {
+      _setupOpen = false;
+    }
     await _load();
   }
 
@@ -108,7 +126,7 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
     }
     final applied = await Navigator.push<bool>(
       context,
-      CupertinoPageRoute(builder: (_) => WeeklyPlanScreen(profile: profile)),
+      MaterialPageRoute(builder: (_) => WeeklyPlanScreen(profile: profile)),
     );
     await _load();
     if (applied == true && mounted) {
