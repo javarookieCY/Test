@@ -29,4 +29,6 @@ flutter:
   assets:
     - assets/images/foods/
     - assets/images/plans/
+    - assets/images/start_screen/
+    - assets/images/survey_screen/
     - assets/data/
