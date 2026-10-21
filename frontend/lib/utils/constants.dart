@@ -2,19 +2,19 @@ import 'package:flutter/material.dart';
 
 class ElementColors {
   // App 主色調（深色背景）
-  static const background = Color(0xFF1B262C);
+  static const background = Color.fromARGB(255, 26, 26, 26);
 
   // 卡片 / 次表面：比背景亮一階
-  static const cardBg = Color(0xFF22333B);
+  static const cardBg = Color.fromARGB(255, 71, 71, 71);
 
   // 強調色：所有原本的綠色、按鈕、選取狀態都用這個
-  static const accent = Color(0xFF3282B8);
+  static const accent = Color.fromARGB(255, 107, 107, 107);
 
   // 未選取狀態用：比 accent 暗一階，但仍看得清文字
-  static const accentDim = Color(0xFF1E4E63);
+  static const accentDim = Color.fromARGB(255, 39, 39, 39);
 
   // 淺色介面色調：高亮文字、小標示、進度等
-  static const lightUi = Color(0xFFBBE1FA);
+  static const lightUi = Color.fromARGB(255, 199, 200, 201);
 
   // 有氧專用強調色（跟 accent 的重訓藍做區隔，例如訓練清單的比例條）
   static const cardio = Color(0xFFE8A33D);
@@ -25,7 +25,7 @@ class ElementColors {
   // 超標 / 超過上限（熱量、鈉）用
   static const warning = Color(0xFFE66767);
 
-  static const dayBg = Color.fromARGB(100, 116, 116, 116);
+  static const dayBg = Color.fromARGB(99, 97, 97, 97);
   static const dayBorder = Color.fromARGB(255, 179, 179, 179);
 }
 
@@ -44,7 +44,7 @@ ButtonStyle segmentedStyleOnDark() {
     backgroundColor: WidgetStateProperty.resolveWith((states) {
       return states.contains(WidgetState.selected)
           ? ElementColors.accent
-          : ElementColors.accentDim;
+          : const Color.fromARGB(255, 34, 34, 34);
     }),
     foregroundColor: WidgetStateProperty.resolveWith((states) {
       return states.contains(WidgetState.selected)
