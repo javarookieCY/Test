@@ -32,7 +32,11 @@ class _TextAnswerState extends State<TextAnswer> {
         child: TextField(
           style: TextStyle(
             fontSize: 70,
+<<<<<<< HEAD
             color: Colors.black
+=======
+            color: Colors.black,
+>>>>>>> bce78eb597e2051b28514809566c5ce7416ab64e
           ),
           controller: _controller,
           onChanged: widget.onChanged,

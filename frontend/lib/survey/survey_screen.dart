@@ -110,12 +110,18 @@ class _SurveyState extends State<Survey> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        FilledButton(
+                        ElevatedButton(
                           onPressed: _answers[_current] == null ? null : _nextQustion,
+                          style: ButtonStyle(
+                            backgroundColor: WidgetStatePropertyAll<Color?>(
+                              _answers[_current] == null ? Colors.white : Colors.grey,
+                            ),
+                          ),
                           child: Text(
                             '繼續',
                             style: TextStyle(
                               fontSize: 20,
+                              color: Colors.black,
                               fontWeight: FontWeight(400)
                             ),
                           )

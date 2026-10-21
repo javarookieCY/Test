@@ -95,10 +95,10 @@ class ExerciseDef {
 
   /// 設定畫面滾輪的選項：min, min+step, …, max
   List<int> get amountOptions =>
-      [for (var v = minAmount; v <= maxAmount; v += step) v];
+    [for (var v = minAmount; v <= maxAmount; v += step) v];
 
   bool isValidAmount(int v) =>
-      v >= minAmount && v <= maxAmount && (v - minAmount) % step == 0;
+    v >= minAmount && v <= maxAmount && (v - minAmount) % step == 0;
 
   /// 把任意數字拉回合理範圍內，並對齊到 step（給自動排計畫用）
   int clampAmount(int v) {

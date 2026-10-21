@@ -24,13 +24,14 @@ class ChoiceAnswer extends StatelessWidget{
             onPressed: () => onSelected(option),
             style: ButtonStyle(
               backgroundColor: WidgetStatePropertyAll<Color?>(
-                option == selected ? Colors.blue : Colors.grey,
+                option == selected ? Colors.grey : Colors.white54,
               )
             ), 
             child: Text(
               option,
               style: TextStyle(
                 fontSize: 20,
+                color: Colors.black,
                 fontWeight: FontWeight(900)
               ),
               )
