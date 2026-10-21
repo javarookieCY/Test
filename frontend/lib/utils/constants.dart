@@ -2,16 +2,16 @@ import 'package:flutter/material.dart';
 
 class ElementColors {
   // App 主色調（深色背景）
-  static const background = Color(0xFF1B262C);
+  static const background = Colors.black;
 
   // 卡片 / 次表面：比背景亮一階
-  static const cardBg = Color(0xFF22333B);
+  static const cardBg = Color.fromARGB(255, 119, 126, 131);
 
   // 強調色：所有原本的綠色、按鈕、選取狀態都用這個
-  static const accent = Color(0xFF3282B8);
+  static const accent = Color.fromARGB(255, 58, 58, 58);
 
   // 未選取狀態用：比 accent 暗一階，但仍看得清文字
-  static const accentDim = Color(0xFF1E4E63);
+  static const accentDim = Color.fromARGB(255, 72, 72, 72);
 
   // 淺色介面色調：高亮文字、小標示、進度等
   static const lightUi = Color(0xFFBBE1FA);
@@ -29,7 +29,7 @@ class ElementColors {
   static const dayBorder = Color.fromARGB(255, 179, 179, 179);
 }
 
-const kGreyBoldText = TextStyle(color: Colors.grey, fontWeight: FontWeight.bold);
+const kGreyBoldText = TextStyle(color: Color.fromARGB(255, 255, 255, 255), fontWeight: FontWeight.bold);
 const kTitleText = TextStyle(
   color: Colors.white,
   fontSize: 18.0,
