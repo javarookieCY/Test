@@ -112,6 +112,7 @@ class _SurveyState extends State<Survey> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
+                        
                         ElevatedButton(
                           onPressed: _answers[_current] == null ? null : _nextQustion,
                           style: ElevatedButton.styleFrom(
@@ -124,6 +125,7 @@ class _SurveyState extends State<Survey> {
                             '繼續',
                             style: TextStyle(
                               fontSize: 20,
+                              color: Colors.black,
                               fontWeight: FontWeight(400)
                             ),
                           )
