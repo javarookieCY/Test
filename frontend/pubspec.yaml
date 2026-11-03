@@ -31,4 +31,5 @@ flutter:
     - assets/images/plans/
     - assets/images/start_screen/
     - assets/images/survey_screen/
+    - assets/images/home_screen/
     - assets/data/

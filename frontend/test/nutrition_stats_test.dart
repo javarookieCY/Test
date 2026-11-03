@@ -1,5 +1,5 @@
-import 'package:flutter_application_1/models/food_item.dart';
-import 'package:flutter_application_1/models/nutrients.dart';
+import 'package:flutter_application_1/home/food/food_item.dart';
+import 'package:flutter_application_1/home/food/nutrients.dart';
 import 'package:flutter_application_1/utils/nutrition_stats.dart';
 import 'package:flutter_test/flutter_test.dart';
 

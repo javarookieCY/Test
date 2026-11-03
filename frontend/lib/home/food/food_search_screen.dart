@@ -2,9 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../db_helper.dart';
-import '../models/food_ref_item.dart';
-import '../utils/constants.dart';
+import '../../db_helper.dart';
+import '../../models/food_ref_item.dart';
+import '../../utils/constants.dart';
 
 /// 「手動搜尋」：使用者打中文，像 Google 一樣打第一個字就即時跳出相關食品。
 /// 點一筆就把它加進使用者的餐點庫（透過 [onPick] 回呼，回傳是否成功）。

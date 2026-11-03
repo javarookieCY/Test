@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 
 /* 
   年齡/體重滾輪選擇:
@@ -34,6 +33,13 @@ class _NumberAnswerState extends State<NumberAnswer> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    // ???
+    WidgetsBinding.instance.addPostFrameCallback((_)=> widget.onChanged(widget.initial));
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -41,11 +47,19 @@ class _NumberAnswerState extends State<NumberAnswer> {
         SizedBox(
           height: 300,
           child: CupertinoPicker(
+            scrollController: _controller,
             itemExtent: 50, 
             onSelectedItemChanged: (i) => widget.onChanged(widget.min + i), 
             children:[
               for(int i = widget.min; i < widget.max; i++)
-                Center(child: Text('$i ${widget.unit}'),)
+                Center(
+                  child: Text(
+                    '$i ${widget.unit}',
+                    style: TextStyle(
+                      fontWeight: FontWeight(800)
+                    ),
+                    ),
+                )
             ]
           )
         )

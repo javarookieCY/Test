@@ -2,7 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
-import '../../models/nutrients.dart';
+import '../../home/food/nutrients.dart';
 import '../../utils/constants.dart';
 import '../../utils/nutrition_math.dart';
 import '../../utils/nutrition_stats.dart';

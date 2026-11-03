@@ -31,7 +31,8 @@ class _TextAnswerState extends State<TextAnswer> {
         padding: const EdgeInsets.all(40.0),
         child: TextField(
           style: TextStyle(
-            fontSize: 70
+            fontSize: 70,
+            color: Colors.black
           ),
           controller: _controller,
           onChanged: widget.onChanged,

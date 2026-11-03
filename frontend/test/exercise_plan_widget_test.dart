@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flutter_application_1/db_helper.dart';
-import 'package:flutter_application_1/models/user_profile.dart';
+import 'package:flutter_application_1/user/user_profile.dart';
 import 'package:flutter_application_1/screens/exercise_screen.dart';
 import 'package:flutter_application_1/screens/exercise_task_setup_screen.dart';
 import 'package:flutter_application_1/screens/weekly_plan_screen.dart';

@@ -4,8 +4,8 @@ import 'dart:io';
 
 import 'package:flutter_application_1/db_helper.dart';
 import 'package:flutter_application_1/models/exercise_task.dart';
-import 'package:flutter_application_1/models/nutrients.dart';
-import 'package:flutter_application_1/models/user_profile.dart';
+import 'package:flutter_application_1/home/food/nutrients.dart';
+import 'package:flutter_application_1/user/user_profile.dart';
 import 'package:flutter_application_1/utils/exercise_catalog.dart';
 import 'package:flutter_application_1/utils/nutrition_math.dart';
 import 'package:flutter_application_1/utils/nutrition_stats.dart';

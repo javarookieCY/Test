@@ -1,36 +1,29 @@
 import 'package:flutter/material.dart';
-import '../db_helper.dart';
-import '../models/food_item.dart';
-import '../models/meal_item.dart';
-import '../models/nutrients.dart';
-import '../models/plan_item.dart';
-import '../models/user_profile.dart';
-import '../utils/constants.dart';
-import '../widgets/home/calories_info.dart';
-import '../widgets/home/daily_target_card.dart';
-import '../widgets/home/home_header.dart';
-import '../widgets/home/streak_section.dart';
-import '../widgets/home/week_row.dart';
-import '../widgets/meals/meal_entry.dart';
-import 'food_search_screen.dart';
-import 'onboarding_screen.dart';
-import 'water_screen.dart';
+import 'package:flutter_application_1/utils/constants.dart';
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title, this.exerciseTick = 0});
-  final String title; //別的.dart要傳arg進來，故不用宣告成private
-  final int exerciseTick;
+import '../../db_helper.dart';
+
+import '../../home/food/food_item.dart';
+import '../../home/food/meal_item.dart';
+import '../../home/food/food_search_screen.dart';
+
+import '../../screens/onboarding_screen.dart';
+import '../../user/user_profile.dart';
+
+import 'meal_list.dart';
+
+
+class DietPage extends StatefulWidget {
+  const DietPage({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<DietPage> createState() => _DietPageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
+class _DietPageState extends State<DietPage> {
   late final DateTime _today;
   late final List<DateTime> _weekDates;
   late int _selectedIndex;
-  int _streakCount = 0;
-  DateTime? _lastLoggedDate;
 
   // 使用者自訂的餐點庫，從 SQLite 讀出來存在這裡
   List<FoodItem> _foodLibrary = [];
@@ -45,92 +38,6 @@ class _MyHomePageState extends State<MyHomePage> {
     MealItem(title: '宵夜'),
     MealItem(title: '其他餐點'),
   ];
-
-  int _burnedCalories = 0;
-  int _waterConsumedMl = 0;
-  int _waterTargetMl = 2000;
-
-  // 每日熱量目標：有個人資料就用試算值，否則暫用一個保守預設值
-  int get _dailyCalorieBudget => _profile?.targets.calories ?? 2000;
-
-  int get _consumedCalories =>
-      _mealItems.fold(0, (sum, meal) => sum + meal.calories);
-
-  // 剩餘 = 目標 − 已攝取 + 運動消耗
-  int get _remainingCalories =>
-      _dailyCalorieBudget - _consumedCalories + _burnedCalories;
-
-  bool _isSameDay(DateTime a, DateTime b) {
-    return a.year == b.year && a.month == b.month && a.day == b.day;
-  }
-
-  bool _isYesterday(DateTime a, DateTime b) {
-    final yesterday = DateTime(b.year, b.month, b.day - 1);
-    return _isSameDay(a, yesterday);
-  }
-
-
-  void _onFoodAddedToMeal(String mealTitle, String foodName, int calories, double portion,
-      Nutrients nutrients) async {
-    final meal = _mealItems.firstWhere((item) => item.title == mealTitle);
-    final existingIdx = meal.items.indexWhere((e) => e.name == foodName);
-    int calorieDiff = calories;
-
-    if (existingIdx != -1) {
-      calorieDiff = calories - meal.items[existingIdx].calories;
-    }
-
-    final date = _weekDates[_selectedIndex];
-    final dateStr = '${date.year}-${date.month}-${date.day}';
-
-    if (calorieDiff != 0) {
-      await DBHelper.instance.insertMeal(mealTitle, calorieDiff, dateStr);
-    }
-
-    if (portion <= 0) {
-      await DBHelper.instance.deleteMealFood(dateStr, mealTitle, foodName);
-    } else {
-      await DBHelper.instance
-          .upsertMealFood(dateStr, mealTitle, foodName, calories, portion, nutrients);
-    }
-
-    setState(() {
-      if (existingIdx != -1) {
-        if (portion <= 0) {
-          meal.items.removeAt(existingIdx);
-        } else {
-          meal.items[existingIdx].portion = portion;
-          meal.items[existingIdx].calories = calories;
-        }
-      } else {
-        if (portion > 0) {
-          meal.items.add(MealFoodRecord(name: foodName, calories: calories, portion: portion));
-        }
-      }
-      meal.calories += calorieDiff;
-
-      if (calorieDiff <= 0) return;
-
-      final today = DateTime(
-        DateTime.now().year,
-        DateTime.now().month,
-        DateTime.now().day,
-      );
-
-      if (_lastLoggedDate == null) {
-        _streakCount = 1;
-        _lastLoggedDate = today;
-      } else if (_isSameDay(_lastLoggedDate!, today)) {
-        // 同一天，不加
-      } else if (_isYesterday(_lastLoggedDate!, today)) {
-        _streakCount += 1;
-        _lastLoggedDate = today;
-      } else {
-        _streakCount = 1;
-        _lastLoggedDate = today;
-      }
-    });
-  }
 
   // 從 SQLite 讀出目前的餐點庫，更新畫面
   Future<void> _loadFoodLibrary() async {
@@ -160,15 +67,6 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   // 重新開 Onboarding（編輯模式），存完更新目標卡片
-  Future<void> _editProfile() async {
-    final result = await Navigator.push<UserProfile>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => OnboardingScreen(initial: _profile),
-      ),
-    );
-    if (mounted && result != null) setState(() => _profile = result);
-  }
 
   
   // 記錄今天的體重；體重會影響目標（BMR/蛋白質），所以存完重新載入 profile
@@ -231,31 +129,17 @@ class _MyHomePageState extends State<MyHomePage> {
   // 從 SQLite 讀取指定日期的運動消耗熱量
   Future<void> _loadBurnedForDate(DateTime date) async {
     final dateStr = '${date.year}-${date.month}-${date.day}';
-    final burned = await DBHelper.instance.getBurnedCaloriesByDate(dateStr);
+    await DBHelper.instance.getBurnedCaloriesByDate(dateStr);
     if (!mounted) return;
-    setState(() => _burnedCalories = burned);
   }
 
   // 從 SQLite 讀取指定日期的喝水紀錄；當天還沒存過就沿用最近一次的目標
   Future<void> _loadWaterForDate(DateTime date) async {
     final dateStr = '${date.year}-${date.month}-${date.day}';
-    final entry = await DBHelper.instance.getWaterLog(dateStr);
-    final consumed = entry?.consumedMl ?? 0;
-    final target = entry?.targetMl ?? await DBHelper.instance.getLatestWaterTarget() ?? 2000;
+    await DBHelper.instance.getWaterLog(dateStr);
     if (!mounted) return;
     setState(() {
-      _waterConsumedMl = consumed;
-      _waterTargetMl = target;
     });
-  }
-
-  // 打開喝水頁；回來後重新讀一次，讓卡片上的進度即時反映
-  Future<void> _openWaterScreen() async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const WaterScreen()),
-    );
-    _loadWaterForDate(_weekDates[_selectedIndex]);
   }
 
   // 從 SQLite 讀取指定日期的所有餐點明細
@@ -578,189 +462,63 @@ class _MyHomePageState extends State<MyHomePage> {
     _loadProfileThenGate(); // 載入個人資料；沒有就跳 Onboarding
   }
 
-  @override
-  void didUpdateWidget(covariant MyHomePage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // 運動頁新增/刪除紀錄後，RootShell 會改 exerciseTick，這裡重抓消耗熱量
-    if (oldWidget.exerciseTick != widget.exerciseTick) {
-      _loadBurnedForDate(_weekDates[_selectedIndex]);
-    }
-  }
 
-  String get _selectedDateLabel {
-    final date = _weekDates[_selectedIndex];
-    final diff = date.difference(_today).inDays;
-    if (diff == 0) return '今天';
-    if (diff == -1) return '昨天';
-    if (diff == 1) return '明天';
-    return '${date.month}/${date.day}';
-  }
 
-  void _selectDay(int index) {
-    setState(() => _selectedIndex = index);
-    _loadMealsForDate(_weekDates[index]);
-    _loadWaterForDate(_weekDates[index]);
-  }
 
-    final List<PlanItem> _samplePlans = const [
-    PlanItem(
-      title: '低碳方案',
-      imagePath: 'assets/images/plans/plan_low_carb.jpg',
-      description: '減少精緻澱粉攝取，以蛋白質與蔬菜為主的飲食方式。',
-      dietRules: ['每日碳水控制在100g以內', '優先選擇原型食物', '避免含糖飲料'],
-    ),
-    PlanItem(
-      title: '地中海方案',
-      imagePath: 'assets/images/plans/plan_mediterranean.jpg',
-      description: '以橄欖油、魚類、蔬果為主，強調不飽和脂肪。',
-      dietRules: ['每週至少2次魚類', '多攝取堅果與豆類', '減少紅肉頻率'],
-    ),
-    PlanItem(
-      title: '高蛋白方案',
-      imagePath: 'assets/images/plans/plan_high_protein.jpg',
-      description: '提高蛋白質比例，適合有重訓習慣的人。',
-      dietRules: ['每公斤體重攝取1.6-2.2g蛋白質', '分散在三餐攝取', '搭配足夠水分'],
-    ),
-  ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+
+      ),
       body: Container(
         alignment: Alignment.center,
-        color: ElementColors.background,
+        color: const Color.fromARGB(255, 46, 46, 46),
         child: Column(
           children: [
             Expanded(
-              child: CustomScrollView(
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: Column(
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 15.0),
+                    child: Wrap(
+                      alignment: WrapAlignment.end,
+                      spacing: 4,
                       children: [
-                        HomeHeader(dateLabel: _selectedDateLabel),
-                        WeekRow(
-                          today: _today,
-                          weekDates: _weekDates,
-                          selectedIndex: _selectedIndex,
-                          onSelect: _selectDay,
-                        ),
-                        const SizedBox(height: 15.0),
-                        StreakInfoRow(streakCount: _streakCount),
-                        const SizedBox(height: 15.0),
-                        FoodStreakSection(plans: _samplePlans),
-                        if (_profile != null)
-                          DailyTargetCard(
-                            targets: _profile!.targets,
-                            consumed: _consumedCalories,
-                            burned: _burnedCalories,
-                            onEditProfile: _editProfile,
-                          )
-                        else
-                          CaloriesFetch(
-                            remaining: _remainingCalories,
-                            consumed: _consumedCalories,
-                          ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 15.0),
-                          child: Wrap(
-                            alignment: WrapAlignment.end,
-                            spacing: 4,
-                            children: [
-                              TextButton.icon(
-                                onPressed: _showLogWeightDialog,
-                                icon: const Icon(Icons.monitor_weight_outlined,
-                                    color: Colors.white),
-                                label: const Text(
-                                  '記錄體重',
-                                  style: TextStyle(color: Colors.white),
-                                ),
-                              ),
-                              TextButton.icon(
-                                onPressed: _openFoodSearch,
-                                icon: const Icon(Icons.search, color: Colors.white),
-                                label: const Text(
-                                  '搜尋食品',
-                                  style: TextStyle(color: Colors.white),
-                                ),
-                              ),
-                              TextButton.icon(
-                                onPressed: _showManageFoodLibraryDialog,
-                                icon: const Icon(Icons.list_alt, color: Colors.white),
-                                label: const Text(
-                                  '管理餐點庫',
-                                  style: TextStyle(color: Colors.white),
-                                ),
-                              ),
-                            ],
+                        TextButton.icon(
+                          onPressed: _showLogWeightDialog,
+                          icon: const Icon(Icons.monitor_weight_outlined,
+                              color: Colors.white),
+                          label: const Text(
+                            '記錄體重',
+                            style: TextStyle(color: Colors.white),
                           ),
                         ),
-                        MealEntry(
-                          meals: _mealItems,
-                          foodLibrary: _foodLibrary,
-                          onFoodAdded: _onFoodAddedToMeal,
-                          onManageFoodLibrary: _showAddFoodDialog,
+                        TextButton.icon(
+                          onPressed: _openFoodSearch,
+                          icon: const Icon(Icons.search, color: Colors.white),
+                          label: const Text(
+                            '搜尋食品',
+                            style: TextStyle(color: Colors.white),
+                          ),
                         ),
-                        _waterCard(),
+                        TextButton.icon(
+                          onPressed: _showManageFoodLibraryDialog,
+                          icon: const Icon(Icons.list_alt, color: Colors.white),
+                          label: const Text(
+                            '管理餐點庫',
+                            style: TextStyle(color: Colors.white),
+                          ),
+                        ),
                       ],
                     ),
                   ),
+                  Expanded(child: MealList()),
                 ],
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _waterCard() {
-    final progress = _waterTargetMl <= 0
-        ? 0.0
-        : (_waterConsumedMl / _waterTargetMl).clamp(0, 1).toDouble();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(15, 8, 15, 20),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: _openWaterScreen,
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: ElementColors.cardBg,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.water_drop, color: ElementColors.accent, size: 16),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('水',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 4),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        value: progress,
-                        minHeight: 6,
-                        backgroundColor: ElementColors.accentDim,
-                        valueColor: const AlwaysStoppedAnimation(ElementColors.accent),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text('$_waterConsumedMl / $_waterTargetMl ml',
-                        style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              const Icon(Icons.chevron_right, color: Colors.white38),
-            ],
-          ),
         ),
       ),
     );

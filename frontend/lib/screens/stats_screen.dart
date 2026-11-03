@@ -8,15 +8,9 @@ import '../widgets/common/cupertino_day_picker.dart';
 import '../widgets/stats/nutrition_day_view.dart';
 import '../widgets/stats/nutrition_week_view.dart';
 
-/// 「統計」分頁。右上角一顆日期按鈕（預設「今天」），點開是一個小清單：
-/// 最近 7 天、一週（本週一～日）、選擇其他日期…
-/// - 單一天：圓餅圖（熱量 / 營養素可切換）+ 營養素（熱量、三大營養素、纖維、鈉）對目標的進度
-/// - 一週：每日長條圖（可切換熱量 / 三大營養素）+ 每日平均 + 每日明細表
 class StatsScreen extends StatefulWidget {
   const StatsScreen({super.key, this.refreshTick = 0});
 
-  /// RootShell 每次切換到這一頁就會 +1，讓頁面知道要重新讀資料庫
-  /// （因為 PageView 用 children 一次建好三頁，這頁不會自動感知到別頁改了飲食紀錄）。
   final int refreshTick;
 
   @override

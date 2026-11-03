@@ -7,10 +7,10 @@ import 'package:path/path.dart';
 
 import 'models/exercise_entry.dart';
 import 'models/exercise_task.dart';
-import 'models/food_item.dart';
+import 'home/food/food_item.dart';
 import 'models/food_ref_item.dart';
-import 'models/nutrients.dart';
-import 'models/user_profile.dart';
+import 'home/food/nutrients.dart';
+import 'user/user_profile.dart';
 import 'models/water_entry.dart';
 import 'utils/exercise_catalog.dart';
 

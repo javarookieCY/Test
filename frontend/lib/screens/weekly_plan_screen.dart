@@ -2,7 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../db_helper.dart';
-import '../models/user_profile.dart';
+import '../user/user_profile.dart';
 import '../utils/constants.dart';
 import '../utils/nutrition_math.dart';
 import '../utils/workout_planner.dart';

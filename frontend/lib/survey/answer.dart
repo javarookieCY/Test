@@ -19,6 +19,7 @@ class AnswerData {
     this.min = 0,
     this.max = 200,
     this.unit = '',
+    this.initial = 0,
     this.initialText = '',
   });
 
@@ -30,6 +31,7 @@ class AnswerData {
   final int min;
   final int max;
   final String unit;
+  final int initial;
   // TextAnswer
   final String initialText;
 
@@ -37,9 +39,9 @@ class AnswerData {
   // 加static後Survey才能直接透過類別存取answerList
   static const List<AnswerData> answerList = [
     AnswerData(type: AnswerType.choice, options: ['男性', '女性'], horizontal: false),
-    AnswerData(type: AnswerType.number, unit: '歲'),
-    AnswerData(type: AnswerType.number, unit: '公分'),
-    AnswerData(type: AnswerType.number, unit: '公斤'),
+    AnswerData(type: AnswerType.number, unit: '歲', initial: 20),
+    AnswerData(type: AnswerType.number, unit: '公分', initial: 170),
+    AnswerData(type: AnswerType.number, unit: '公斤', initial: 60),
     AnswerData(type: AnswerType.choice, options: ['增加肌肉含量', '建立健身基礎', '減掉多餘脂肪'], horizontal: true),
     AnswerData(type: AnswerType.text, initialText: ''),
   ];
@@ -71,7 +73,7 @@ class AnswerText extends StatelessWidget {
         );
       case AnswerType.number :
         return NumberAnswer(
-          initial: 0, 
+          initial: data.initial, 
           min: data.min, 
           max: data.max, 
           unit: data.unit, 

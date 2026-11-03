@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+
 // choice類型的answer要畫出一排按鈕，透過按鈕點擊回傳給Survey
 class ChoiceAnswer extends StatelessWidget{
   const ChoiceAnswer({
@@ -21,17 +22,20 @@ class ChoiceAnswer extends StatelessWidget{
     final List<ElevatedButton> buttons = [
       for(final String option in options) 
           ElevatedButton(
-            onPressed: () => onSelected(option),
-            style: ButtonStyle(
-              backgroundColor: WidgetStatePropertyAll<Color?>(
-                option == selected ? Colors.blue : Colors.grey,
-              )
-            ), 
+            onPressed: () {
+              onSelected(option);
+            },
+            style: ElevatedButton.styleFrom(
+              minimumSize: Size(80, 40),
+              backgroundColor: option == selected ? Colors.black : Colors.grey,
+              foregroundColor: option == selected ? Colors.white : Colors.black,
+            ),
             child: Text(
               option,
               style: TextStyle(
                 fontSize: 20,
-                fontWeight: FontWeight(900)
+                fontWeight: FontWeight(900),
+                
               ),
               )
           )

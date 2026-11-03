@@ -4,7 +4,7 @@ import '../utils/chart.dart';
 import '../db_helper.dart';
 import '../models/exercise_entry.dart';
 import '../models/exercise_task.dart';
-import '../models/user_profile.dart';
+import '../user/user_profile.dart';
 import '../utils/constants.dart';
 import '../utils/exercise_catalog.dart';
 import '../utils/exercise_data.dart';

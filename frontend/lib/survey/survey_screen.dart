@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/home/home.dart';
 import 'question.dart';
 import 'answer.dart';
-import '../screens/root_shell.dart';
 
 class Survey extends StatefulWidget {
   const Survey({super.key});
   @override
   State<Survey> createState() => _SurveyState();
 }
-// 狀態放在需要它的最高那一層
+
 class _SurveyState extends State<Survey> {
-  // 現在是第幾個問題
   int _current = 0;
 
   void _nextQustion() {
@@ -20,7 +19,10 @@ class _SurveyState extends State<Survey> {
       });
     }
     else {
-      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const RootShell()));
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const Home()),
+        (route) => false,
+      );
     }
   }
  
@@ -110,8 +112,14 @@ class _SurveyState extends State<Survey> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        FilledButton(
+                        ElevatedButton(
                           onPressed: _answers[_current] == null ? null : _nextQustion,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.black,
+                            foregroundColor: Colors.white,
+                            disabledBackgroundColor: Colors.grey,
+                            disabledForegroundColor: Colors.black,
+                          ),
                           child: Text(
                             '繼續',
                             style: TextStyle(
@@ -133,4 +141,3 @@ class _SurveyState extends State<Survey> {
   }
 
 }
-

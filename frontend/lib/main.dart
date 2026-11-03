@@ -1,7 +1,6 @@
 import 'package:device_preview/device_preview.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'screens/root_shell.dart';
 import 'utils/constants.dart';
 import 'utils/scroll_behavior.dart';
 import 'screens/start_screen.dart';
@@ -32,7 +31,7 @@ class MyApp extends StatelessWidget {
         ),
         textTheme: Typography.material2021().white.apply(
               bodyColor: Colors.white,
-              displayColor: Colors.white,
+              displayColor: Colors.black,
             ),
         cupertinoOverrideTheme:
             const CupertinoThemeData(brightness: Brightness.dark),

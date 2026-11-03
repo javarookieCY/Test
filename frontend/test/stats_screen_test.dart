@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flutter_application_1/db_helper.dart';
-import 'package:flutter_application_1/models/nutrients.dart';
+import 'package:flutter_application_1/home/food/nutrients.dart';
 import 'package:flutter_application_1/screens/stats_screen.dart';
 import 'package:flutter_application_1/utils/nutrition_math.dart';
 import 'package:flutter_application_1/utils/nutrition_stats.dart';
