@@ -34,12 +34,15 @@ class MealCard extends StatelessWidget{
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
                   Icons.add,
-                  size: 24,
-                  weight: 50,
+                  size: 36,            
+                  color: Colors.grey,
+                ),
+                const SizedBox(
+                  width: 8,
                 ),
                 Text(
                   meal.label,

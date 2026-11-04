@@ -118,14 +118,13 @@ class _SurveyState extends State<Survey> {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.black,
                             foregroundColor: Colors.white,
-                            disabledBackgroundColor: Colors.grey,
-                            disabledForegroundColor: Colors.black,
+
                           ),
                           child: Text(
                             '繼續',
                             style: TextStyle(
                               fontSize: 20,
-                              color: Colors.black,
+                              
                               fontWeight: FontWeight(400)
                             ),
                           )
