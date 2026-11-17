@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/home/home.dart';
+import 'package:flutter_application_1/home/home_screen.dart';
 import 'question.dart';
 import 'answer.dart';
+
 
 class Survey extends StatefulWidget {
   const Survey({super.key});
@@ -20,7 +22,7 @@ class _SurveyState extends State<Survey> {
     }
     else {
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const Home()),
+        MaterialPageRoute(builder: (_) => const MyHomePage(title: '',)),
         (route) => false,
       );
     }

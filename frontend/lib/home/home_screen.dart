@@ -658,5 +658,7 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
+  void _loadWaterForDate(DateTime weekDat) {}
 
+  void _loadProfileThenGate() {}
 }
