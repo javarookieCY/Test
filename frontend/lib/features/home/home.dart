@@ -9,7 +9,7 @@ import 'home_panel.dart';
 import 'meal_summary_card.dart';
 import 'notification_button.dart';
 import 'nutrition_chart.dart';
-import 'week_strip.dart';
+import 'week_row.dart';
 
 class Home extends StatefulWidget {
   const Home({super.key, required this.onGoToPage});
@@ -39,8 +39,10 @@ class _HomeState extends State<Home> {
 
   int _targetProtein = _defaultTargetProtein;
   int _consumedProtein = 0;
+
   int _targetCarbs = _defaultTargetCarbs;
   int _consumedCarbs = 0;
+
   int _targetFat = _defaultTargetFat;
   int _consumedFat = 0;
 
@@ -222,8 +224,8 @@ class _HomeState extends State<Home> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          WeekStrip(selectedDate: _selectedDate, onDateSelected: _onDateSelected),
-          const SizedBox(height: 12),
+          // WeekRow(selectedDate: _selectedDate, onDateSelected: _onDateSelected),
+          SizedBox(height: 12),
           NutritionChart(
             remainingCalorie: _remainingCalorie,
             targetCalorie: _targetCalorie,
@@ -290,15 +292,16 @@ class _HomeState extends State<Home> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
               _buildHeader(),
-              const SizedBox(height: 16),
+              const SizedBox(height: 36),
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.only(bottom: 32),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: <Widget>[
+                      SizedBox(height: 36),
                       _buildSummaryCard(),
-                      const SizedBox(height: 24),
+                      SizedBox(height: 24),
                       _buildActivityHeader(),
                       _buildMealCards(),
                     ],

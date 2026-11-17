@@ -1,9 +1,10 @@
+/*
 import 'package:flutter/material.dart';
 
 import '../../utils/constants.dart';
 
-class WeekStrip extends StatelessWidget {
-  const WeekStrip({
+class WeekRow extends StatelessWidget {
+  const WeekRow({
     super.key,
     required this.selectedDate,
     required this.onDateSelected,
@@ -106,3 +107,4 @@ class _DayCell extends StatelessWidget {
     );
   }
 }
+*/

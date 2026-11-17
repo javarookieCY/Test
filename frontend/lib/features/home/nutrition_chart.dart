@@ -46,7 +46,7 @@ class NutritionChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Color gaugeColor = ElementColors.calorieRing;
+    Color gaugeColor = const Color.fromARGB(255, 66, 164, 255);
     Color numberColor = Colors.white;
     int number = remainingCalorie;
     String label = 'kcal 剩餘';
@@ -83,11 +83,11 @@ class NutritionChart extends StatelessWidget {
                 ),
                 const SizedBox(width: 16),
                 Expanded(
-                  child: _MacroBar(label: '脂肪', consumed: consumedFat, target: targetFat, color: ElementColors.fatBar),
+                  child: _MacroBar(label: '脂肪', consumed: consumedFat, target: targetFat, color: const Color.fromARGB(255, 0, 255, 115)),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
-                  child: _MacroBar(label: '蛋白質', consumed: consumedProtein, target: targetProtein, color: ElementColors.proteinBar),
+                  child: _MacroBar(label: '蛋白質', consumed: consumedProtein, target: targetProtein, color: const Color.fromARGB(255, 0, 187, 255)),
                 ),
               ],
             ),

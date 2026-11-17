@@ -28,7 +28,7 @@ class DateButton extends StatelessWidget {
             child: Column(
               children: <Widget>[
                 Padding(
-                  padding: const EdgeInsets.all(8.0),
+                  padding: const EdgeInsets.all(10.0),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: <Widget>[
@@ -62,13 +62,14 @@ class DateButton extends StatelessWidget {
                     data: const CupertinoThemeData(
                       brightness: Brightness.dark,
                       textTheme: CupertinoTextThemeData(
-                        dateTimePickerTextStyle: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                        dateTimePickerTextStyle: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight(500)),
                       ),
                     ),
                     child: CupertinoDatePicker(
                       mode: CupertinoDatePickerMode.date,
                       dateOrder: DatePickerDateOrder.ymd,
                       initialDateTime: selectedDate,
+                      itemExtent: 40,
                       maximumDate: DateTime.now(),
                       onDateTimeChanged: (DateTime value) {
                         pickedDate = value;
