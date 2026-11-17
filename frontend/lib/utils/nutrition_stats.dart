@@ -1,4 +1,4 @@
-import '../home/food/nutrients.dart';
+import '../features/diet/food/nutrients.dart';
 
 // ── 統計頁的純計算邏輯 ──────────────────────────────
 // 不依賴 Flutter / DB：輸入 meal_foods 的資料列，輸出每天 / 一段期間的加總與平均，方便單獨寫測試。

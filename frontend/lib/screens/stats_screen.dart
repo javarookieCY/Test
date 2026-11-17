@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import '../db_helper.dart';
+import '../database/database_service.dart';
 import '../utils/constants.dart';
 import '../utils/nutrition_math.dart';
 import '../utils/nutrition_stats.dart';
@@ -64,8 +64,8 @@ class _StatsScreenState extends State<StatsScreen> {
   Future<void> _load() async {
     final req = ++_reqId;
     final dates = _dates;
-    final rows = await DBHelper.instance.getMealFoodsByDates(dates.map(dateKey).toList());
-    final profile = await DBHelper.instance.getUserProfile();
+    final rows = await DatabaseService.instance.getMealFoodsByDates(dates.map(dateKey).toList());
+    final profile = await DatabaseService.instance.getUserProfile();
     if (!mounted || req != _reqId) return;
     setState(() {
       _days = groupByDay(dates, rows);

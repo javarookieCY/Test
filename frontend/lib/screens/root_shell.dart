@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../utils/constants.dart';
 import 'stats_screen.dart';
 import 'exercise_screen.dart';
-import '../home/home.dart';
+import '../features/home/home.dart';
 
 /// App 的外層骨架：三頁左右滑動（運動 / 日記 / 統計），
 /// 底部一排 tab 顯示目前在哪一頁，點 tab 或滑動都能切換。

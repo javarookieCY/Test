@@ -5,8 +5,8 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:flutter_application_1/db_helper.dart';
-import 'package:flutter_application_1/home/food/nutrients.dart';
+import 'package:flutter_application_1/database/database_service.dart';
+import 'package:flutter_application_1/features/diet/food/nutrients.dart';
 import 'package:flutter_application_1/screens/stats_screen.dart';
 import 'package:flutter_application_1/utils/nutrition_math.dart';
 import 'package:flutter_application_1/utils/nutrition_stats.dart';
@@ -48,7 +48,7 @@ Future<void> _tapAndLoad(WidgetTester tester, Finder f) async {
 }
 
 void main() {
-  setUp(() => DBHelper.instance.openForTest(inMemoryDatabasePath));
+  setUp(() => DatabaseService.instance.openForTest(inMemoryDatabasePath));
 
   group('統計頁', () {
     String label(DateTime d) => '${d.month}/${d.day}（${'一二三四五六日'[d.weekday - 1]}）';
@@ -100,7 +100,7 @@ void main() {
       final now = DateTime.now();
       final yesterdayDate = DateTime(now.year, now.month, now.day - 1);
       await tester.runAsync(() async {
-        final db = DBHelper.instance;
+        final db = DatabaseService.instance;
         await db.upsertMealFood(dateKey(now), '早餐', '燕麥', 380, 1,
             const Nutrients(protein: 13, carbs: 66, fat: 7, fiber: 10, sodium: 5));
         await db.upsertMealFood(dateKey(now), '午餐', '雞胸便當', 720, 1,

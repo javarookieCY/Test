@@ -4,8 +4,6 @@ import '../survey/survey_screen.dart';
 /*
   加了動畫，所以要用StatefulWidget
   State<類別> createState() {return _類別State()}
-
-
 */
 class StartScreen extends StatefulWidget {
   const StartScreen({super.key});

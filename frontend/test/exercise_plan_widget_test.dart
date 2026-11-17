@@ -5,7 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:flutter_application_1/db_helper.dart';
+import 'package:flutter_application_1/database/database_service.dart';
 import 'package:flutter_application_1/user/user_profile.dart';
 import 'package:flutter_application_1/screens/exercise_screen.dart';
 import 'package:flutter_application_1/screens/exercise_task_setup_screen.dart';
@@ -42,7 +42,7 @@ final _heavyProfile = UserProfile(
 final _wednesday = DateTime(2026, 10, 7, 9);
 
 void main() {
-  setUp(() => DBHelper.instance.openForTest(inMemoryDatabasePath));
+  setUp(() => DatabaseService.instance.openForTest(inMemoryDatabasePath));
 
   group('本週計畫頁', () {
     testWidgets('顯示目標、依身體狀況的調整說明、一週總覽與今天標記', (tester) async {
@@ -62,7 +62,7 @@ void main() {
 
     testWidgets('點一週總覽的圓圈切換運動日：計畫立刻重排並存進個人資料', (tester) async {
       _phoneSize(tester);
-      await tester.runAsync(() => DBHelper.instance.saveUserProfile(_heavyProfile));
+      await tester.runAsync(() => DatabaseService.instance.saveUserProfile(_heavyProfile));
       await tester.pumpWidget(MaterialApp(
           home: WeeklyPlanScreen(profile: _heavyProfile, now: _wednesday)));
       expect(find.text('減脂・每週 4 天'), findsOneWidget);
@@ -72,7 +72,7 @@ void main() {
       await _settleDb(tester);
       expect(find.text('減脂・每週 5 天'), findsOneWidget);
       expect(find.textContaining('週日 10/11・休息'), findsNothing);
-      final saved = await tester.runAsync(() => DBHelper.instance.getUserProfile());
+      final saved = await tester.runAsync(() => DatabaseService.instance.getUserProfile());
       expect(saved!.workoutWeekdays, {1, 2, 4, 5, 7});
 
       await tester.tap(find.text('5')); // 週一：運動 → 休息
@@ -129,7 +129,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(result, isTrue);
 
-      final db = DBHelper.instance;
+      final db = DatabaseService.instance;
       final wed = await tester.runAsync(() => db.getExerciseTasksByDate('2026-10-7'));
       final tue = await tester.runAsync(() => db.getExerciseTasksByDate('2026-10-6'));
       final sun = await tester.runAsync(() => db.getExerciseTasksByDate('2026-10-11'));
@@ -170,7 +170,7 @@ void main() {
       _phoneSize(tester);
       // 只有徒手
       await tester.runAsync(
-          () => DBHelper.instance.saveUserProfile(_heavyProfile.copyWith(equipment: {})));
+          () => DatabaseService.instance.saveUserProfile(_heavyProfile.copyWith(equipment: {})));
       await tester.pumpWidget(const MaterialApp(
           home: ExerciseTaskSetupScreen(date: '2026-10-7', dateLabel: '今天')));
       await _settleDb(tester);
@@ -216,7 +216,7 @@ void main() {
 
       expect(find.text('今天已加入（1）'), findsOneWidget);
       final tasks = await tester
-          .runAsync(() => DBHelper.instance.getExerciseTasksByDate('2026-10-7'));
+          .runAsync(() => DatabaseService.instance.getExerciseTasksByDate('2026-10-7'));
       expect(tasks!.single.sets, 5);
     });
   });

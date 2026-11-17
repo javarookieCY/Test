@@ -3,13 +3,16 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'utils/constants.dart';
 import 'utils/scroll_behavior.dart';
-import 'screens/start_screen.dart';
+
+import 'features/splash/splash_screen.dart';
 
 void main() {
   runApp(
     DevicePreview(
       enabled: true,
-      builder: (context) => const MyApp(),
+      builder: (BuildContext context) {
+        return const MyApp();
+      },
     ),
   );
 }
@@ -36,7 +39,8 @@ class MyApp extends StatelessWidget {
         cupertinoOverrideTheme:
             const CupertinoThemeData(brightness: Brightness.dark),
       ),
-      home: const StartScreen(),
+      // 第一個畫面：封面(1 秒後自己決定要去問卷還是主畫面)
+      home: const SplashScreen(),
     );
   }
 }

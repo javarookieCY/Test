@@ -28,17 +28,19 @@ class FoodItem {
   final String? description;
 
   /// 一份的營養素（記錄到某一餐時再乘上份數）
-  Nutrients get nutrients => Nutrients(
-        protein: protein,
-        carbs: carbs,
-        fat: fat,
-        fiber: fiber,
-        sodium: sodium,
-      );
+  Nutrients get nutrients {
+    return Nutrients(
+      protein: protein,
+      carbs: carbs,
+      fat: fat,
+      fiber: fiber,
+      sodium: sodium,
+    );
+  }
 
-  // 把物件轉成 sqflite 看得懂的 Map（給 insert 用）
+  /// 把物件轉成 sqflite 看得懂的 Map（給 insert 用）
   Map<String, dynamic> toMap() {
-    return {
+    final Map<String, dynamic> map = <String, dynamic>{
       'name': name,
       'calories': calories,
       'protein': protein,
@@ -49,19 +51,34 @@ class FoodItem {
       'image_path': imagePath,
       'description': description,
     };
+    return map;
   }
 
-  // 把資料庫查出來的一筆 row（Map）轉回 FoodItem 物件（給 query 用）
+  /// 從 Map 取出一個數字並轉成 double；是 null 就當 0(舊資料可能沒有纖維、鈉)
+  static double _readOrZero(Map<String, dynamic> map, String key) {
+    final Object? value = map[key];
+    if (value == null) {
+      return 0;
+    }
+    final num number = value as num;
+    return number.toDouble();
+  }
+
+  /// 把資料庫查出來的一筆 row（Map）轉回 FoodItem 物件（給 query 用）
   factory FoodItem.fromMap(Map<String, dynamic> map) {
+    final num proteinNumber = map['protein'] as num;
+    final num carbsNumber = map['carbs'] as num;
+    final num fatNumber = map['fat'] as num;
+
     return FoodItem(
       id: map['id'] as int,
       name: map['name'] as String,
       calories: map['calories'] as int,
-      protein: (map['protein'] as num).toDouble(),
-      carbs: (map['carbs'] as num).toDouble(),
-      fat: (map['fat'] as num).toDouble(),
-      fiber: (map['fiber'] as num?)?.toDouble() ?? 0,
-      sodium: (map['sodium'] as num?)?.toDouble() ?? 0,
+      protein: proteinNumber.toDouble(),
+      carbs: carbsNumber.toDouble(),
+      fat: fatNumber.toDouble(),
+      fiber: _readOrZero(map, 'fiber'),
+      sodium: _readOrZero(map, 'sodium'),
       imagePath: map['image_path'] as String?,
       description: map['description'] as String?,
     );

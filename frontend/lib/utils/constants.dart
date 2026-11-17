@@ -27,6 +27,10 @@ class ElementColors {
 
   static const dayBg = Color.fromARGB(99, 97, 97, 97);
   static const dayBorder = Color.fromARGB(255, 179, 179, 179);
+
+  // 首頁卡片：深灰底、淺灰色邊框
+  static const Color panelBg = Color.fromARGB(255, 46, 46, 46);
+  static const Color panelBorder = Color.fromARGB(255, 120, 120, 120);
 }
 
 const kGreyBoldText = TextStyle(color: Colors.grey, fontWeight: FontWeight.bold);

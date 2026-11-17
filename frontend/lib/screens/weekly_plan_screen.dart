@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
-import '../db_helper.dart';
+import '../database/database_service.dart';
 import '../user/user_profile.dart';
 import '../utils/constants.dart';
 import '../utils/nutrition_math.dart';
@@ -61,7 +61,7 @@ class _WeeklyPlanScreenState extends State<WeeklyPlanScreen> {
       _weekdaysChosen = next;
       _plan = _buildPlan();
     });
-    await DBHelper.instance.updateWorkoutWeekdays(next);
+    await DatabaseService.instance.updateWorkoutWeekdays(next);
   }
 
   Future<void> _notice(String text) => showCupertinoDialog<void>(
@@ -97,7 +97,7 @@ class _WeeklyPlanScreenState extends State<WeeklyPlanScreen> {
 
     setState(() => _applying = true);
     try {
-      await DBHelper.instance.applyWeeklyPlan(planToTasks(_plan, _now));
+      await DatabaseService.instance.applyWeeklyPlan(planToTasks(_plan, _now));
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       debugPrint('套用本週計畫失敗: $e');

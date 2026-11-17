@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../home/food/food_item.dart';
-import '../../home/food/meal_item.dart';
-import '../../home/food/nutrients.dart';
+import '../../features/diet/food/food_item.dart';
+import '../../features/diet/food/meal_item.dart';
+import '../../features/diet/food/nutrients.dart';
 import '../../utils/constants.dart';
 
 class MealCard extends StatefulWidget {

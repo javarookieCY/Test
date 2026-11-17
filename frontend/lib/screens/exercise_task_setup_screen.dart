@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import '../db_helper.dart';
+import '../database/database_service.dart';
 import '../models/exercise_task.dart';
 import '../utils/constants.dart';
 import '../utils/exercise_catalog.dart';
@@ -41,8 +41,8 @@ class _ExerciseTaskSetupScreenState extends State<ExerciseTaskSetupScreen> {
   }
 
   Future<void> _load() async {
-    final tasks = await DBHelper.instance.getExerciseTasksByDate(widget.date);
-    final profile = await DBHelper.instance.getUserProfile();
+    final tasks = await DatabaseService.instance.getExerciseTasksByDate(widget.date);
+    final profile = await DatabaseService.instance.getUserProfile();
     if (!mounted) return;
     setState(() {
       _tasks = tasks;
@@ -67,10 +67,10 @@ class _ExerciseTaskSetupScreenState extends State<ExerciseTaskSetupScreen> {
     final sets = e.category.usesSets ? amount : null;
     final minutes = e.category.usesSets ? null : amount;
     if (existing?.id != null) {
-      await DBHelper.instance
+      await DatabaseService.instance
           .updateExerciseTaskAmount(existing!.id!, sets: sets, minutes: minutes);
     } else {
-      await DBHelper.instance.insertExerciseTask(ExerciseTask(
+      await DatabaseService.instance.insertExerciseTask(ExerciseTask(
         date: widget.date,
         category: e.category,
         name: e.name,
@@ -82,7 +82,7 @@ class _ExerciseTaskSetupScreenState extends State<ExerciseTaskSetupScreen> {
   }
 
   Future<void> _removeTask(int id) async {
-    await DBHelper.instance.deleteExerciseTask(id);
+    await DatabaseService.instance.deleteExerciseTask(id);
     await _load();
   }
 

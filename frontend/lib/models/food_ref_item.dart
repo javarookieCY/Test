@@ -36,44 +36,58 @@ class FoodRefItem {
   final double? sodium; // mg
   final double? water; // g
 
+  /// 把一個可能是 null 的數字轉成 double；是 null 就回傳 null
+  /// (相當於 Java 的 private static Double toDoubleOrNull(Object value))
+  static double? _toDoubleOrNull(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    final num number = value as num;
+    return number.toDouble();
+  }
+
+  /// Map → 物件(從資料庫讀出來用)
   factory FoodRefItem.fromMap(Map<String, dynamic> map) {
-    double? d(Object? v) => v == null ? null : (v as num).toDouble();
+    final num caloriesNumber = map['calories'] as num;
+
     return FoodRefItem(
       id: map['id'] as int?,
       refCode: map['ref_code'] as String,
       name: map['name'] as String,
       alias: map['alias'] as String?,
       category: map['category'] as String?,
-      calories: (map['calories'] as num).round(),
-      protein: d(map['protein']),
-      carbs: d(map['carbs']),
-      fat: d(map['fat']),
-      fiber: d(map['fiber']),
-      sodium: d(map['sodium']),
-      water: d(map['water']),
+      calories: caloriesNumber.round(),
+      protein: _toDoubleOrNull(map['protein']),
+      carbs: _toDoubleOrNull(map['carbs']),
+      fat: _toDoubleOrNull(map['fat']),
+      fiber: _toDoubleOrNull(map['fiber']),
+      sodium: _toDoubleOrNull(map['sodium']),
+      water: _toDoubleOrNull(map['water']),
     );
   }
 
-  // 從 build_food_ref.py 產出的 JSON 物件建立（給首次載入 asset 時用）
+  /// 從 build_food_ref.py 產出的 JSON 物件建立（給首次載入 asset 時用）
   factory FoodRefItem.fromJson(Map<String, dynamic> json) {
-    double? d(Object? v) => v == null ? null : (v as num).toDouble();
+    final num caloriesNumber = json['calories'] as num;
+
     return FoodRefItem(
       refCode: json['ref_code'] as String,
       name: json['name'] as String,
       alias: json['alias'] as String?,
       category: json['category'] as String?,
-      calories: (json['calories'] as num).round(),
-      protein: d(json['protein']),
-      carbs: d(json['carbs']),
-      fat: d(json['fat']),
-      fiber: d(json['fiber']),
-      sodium: d(json['sodium']),
-      water: d(json['water']),
+      calories: caloriesNumber.round(),
+      protein: _toDoubleOrNull(json['protein']),
+      carbs: _toDoubleOrNull(json['carbs']),
+      fat: _toDoubleOrNull(json['fat']),
+      fiber: _toDoubleOrNull(json['fiber']),
+      sodium: _toDoubleOrNull(json['sodium']),
+      water: _toDoubleOrNull(json['water']),
     );
   }
 
+  /// 物件 → Map(存進資料庫用)
   Map<String, dynamic> toMap() {
-    return {
+    final Map<String, dynamic> map = <String, dynamic>{
       'ref_code': refCode,
       'name': name,
       'alias': alias,
@@ -86,5 +100,6 @@ class FoodRefItem {
       'sodium': sodium,
       'water': water,
     };
+    return map;
   }
 }

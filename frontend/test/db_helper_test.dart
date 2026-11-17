@@ -2,9 +2,9 @@
 // 不會碰到 App 自己的 meals.db。
 import 'dart:io';
 
-import 'package:flutter_application_1/db_helper.dart';
+import 'package:flutter_application_1/database/database_service.dart';
 import 'package:flutter_application_1/models/exercise_task.dart';
-import 'package:flutter_application_1/home/food/nutrients.dart';
+import 'package:flutter_application_1/features/diet/food/nutrients.dart';
 import 'package:flutter_application_1/user/user_profile.dart';
 import 'package:flutter_application_1/utils/exercise_catalog.dart';
 import 'package:flutter_application_1/utils/nutrition_math.dart';
@@ -18,7 +18,7 @@ ExerciseTask task(String date, String name, {bool done = false}) => ExerciseTask
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized(); // food_ref 首次載入要讀 asset
-  final db = DBHelper.instance;
+  final db = DatabaseService.instance;
 
   setUp(() => db.openForTest(inMemoryDatabasePath));
 

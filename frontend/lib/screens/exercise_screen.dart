@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import '../utils/chart.dart';
-import '../db_helper.dart';
+import '../database/database_service.dart';
 import '../models/exercise_entry.dart';
 import '../models/exercise_task.dart';
 import '../user/user_profile.dart';
@@ -74,9 +74,9 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
   }
 
   Future<void> _load() async {
-    final entries = await DBHelper.instance.getExercisesByDate(_selectedDateStr);
-    final profile = await DBHelper.instance.getUserProfile();
-    final tasks = await DBHelper.instance.getExerciseTasksByDate(_selectedDateStr);
+    final entries = await DatabaseService.instance.getExercisesByDate(_selectedDateStr);
+    final profile = await DatabaseService.instance.getUserProfile();
+    final tasks = await DatabaseService.instance.getExerciseTasksByDate(_selectedDateStr);
     await _loadWeeklyTrend();
     if (!mounted) return;
     setState(() {
@@ -142,13 +142,13 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
   Future<void> _loadWeeklyTrend() async {
     const days = 7;
     final now = DateTime.now();
-    final weightKg = (await DBHelper.instance.getUserProfile())?.weightKg;
+    final weightKg = (await DatabaseService.instance.getUserProfile())?.weightKg;
     final values = <double>[];
     final labels = <String>[];
     for (int i = days - 1; i >= 0; i--) {
       final d = DateTime(now.year, now.month, now.day - i);
-      final recorded = await DBHelper.instance.getBurnedCaloriesByDate(_dateKey(d));
-      final tasks = await DBHelper.instance.getExerciseTasksByDate(_dateKey(d));
+      final recorded = await DatabaseService.instance.getBurnedCaloriesByDate(_dateKey(d));
+      final tasks = await DatabaseService.instance.getExerciseTasksByDate(_dateKey(d));
       final fromTasks = tasks
           .where((t) => t.done)
           .fold(0, (sum, t) => sum + estimateTaskKcal(t, weightKg: weightKg));
@@ -164,25 +164,25 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
   }
 
   Future<void> _addEntry(ExerciseEntry entry) async {
-    await DBHelper.instance.insertExercise(entry);
+    await DatabaseService.instance.insertExercise(entry);
     await _load();
     widget.onChanged?.call();
   }
 
   Future<void> _deleteEntry(int id) async {
-    await DBHelper.instance.deleteExercise(id);
+    await DatabaseService.instance.deleteExercise(id);
     await _load();
     widget.onChanged?.call();
   }
 
   Future<void> _toggleTaskDone(ExerciseTask task) async {
     if (task.id == null) return;
-    await DBHelper.instance.setExerciseTaskDone(task.id!, !task.done);
+    await DatabaseService.instance.setExerciseTaskDone(task.id!, !task.done);
     await _load();
   }
 
   Future<void> _deleteTask(int id) async {
-    await DBHelper.instance.deleteExerciseTask(id);
+    await DatabaseService.instance.deleteExerciseTask(id);
     await _load();
   }
 
