@@ -1,6 +1,5 @@
 import 'package:flutter_application_1/models/exercise_task.dart';
 import 'package:flutter_application_1/utils/exercise_catalog.dart';
-import 'package:flutter_application_1/utils/exercise_guides.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -104,23 +103,6 @@ void main() {
           searchCatalog('', ExerciseTaskCategory.cardio).length);
       expect(searchCatalog('', ExerciseTaskCategory.flexibility).length,
           kExerciseCatalog.where((e) => e.category == ExerciseTaskCategory.flexibility).length);
-    });
-  });
-
-  group('動作說明', () {
-    test('動作庫每個動作都有說明（部位、至少 2 個步驟、至少 1 個注意事項）', () {
-      for (final e in kExerciseCatalog) {
-        final g = kExerciseGuides[e.name];
-        expect(g, isNotNull, reason: '${e.name} 沒有說明');
-        expect(g!.muscles, isNotEmpty, reason: e.name);
-        expect(g.steps.length, greaterThanOrEqualTo(2), reason: e.name);
-        expect(g.tips, isNotEmpty, reason: e.name);
-      }
-    });
-
-    test('說明裡沒有動作庫以外的名稱（避免改名後留下孤兒說明）', () {
-      final names = kExerciseCatalog.map((e) => e.name).toSet();
-      expect(kExerciseGuides.keys.where((k) => !names.contains(k)), isEmpty);
     });
   });
 

@@ -166,8 +166,7 @@ extension FoodDb on DatabaseService {
   /// food_ref 一共有幾筆
   Future<int> getFoodRefCount() async {
     final Database db = await getDatabase;
-    final List<Map<String, Object?>> rows =
-        await db.rawQuery('SELECT COUNT(*) AS c FROM food_ref');
+    final List<Map<String, Object?>> rows = await db.rawQuery('SELECT COUNT(*) AS c FROM food_ref');
 
     final Map<String, Object?> firstRow = rows.first;
     final Object? count = firstRow['c'];

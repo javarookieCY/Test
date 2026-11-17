@@ -1,62 +1,19 @@
 import 'package:flutter/material.dart';
 
 class ElementColors {
-  // App 主色調（深色背景）
-  static const background = Color.fromARGB(255, 26, 26, 26);
+  static const Color background = Color.fromARGB(255, 26, 26, 26);
+  static const Color accent = Color.fromARGB(255, 107, 107, 107);
+  static const Color accentDim = Color.fromARGB(255, 39, 39, 39);
+  static const Color lightUi = Color.fromARGB(255, 199, 200, 201);
+  static const Color warning = Color(0xFFE66767);
 
-  // 卡片 / 次表面：比背景亮一階
-  static const cardBg = Color.fromARGB(255, 71, 71, 71);
-
-  // 強調色：所有原本的綠色、按鈕、選取狀態都用這個
-  static const accent = Color.fromARGB(255, 107, 107, 107);
-
-  // 未選取狀態用：比 accent 暗一階，但仍看得清文字
-  static const accentDim = Color.fromARGB(255, 39, 39, 39);
-
-  // 淺色介面色調：高亮文字、小標示、進度等
-  static const lightUi = Color.fromARGB(255, 199, 200, 201);
-
-  // 有氧專用強調色（跟 accent 的重訓藍做區隔，例如訓練清單的比例條）
-  static const cardio = Color(0xFFE8A33D);
-
-  // 伸展專用強調色（跟重訓藍、有氧橘做區隔）
-  static const flexibility = Color(0xFF5BBF8A);
-
-  // 超標 / 超過上限（熱量、鈉）用
-  static const warning = Color(0xFFE66767);
-
-  static const dayBg = Color.fromARGB(99, 97, 97, 97);
-  static const dayBorder = Color.fromARGB(255, 179, 179, 179);
-
-  // 首頁卡片：深灰底、淺灰色邊框
   static const Color panelBg = Color.fromARGB(255, 46, 46, 46);
   static const Color panelBorder = Color.fromARGB(255, 120, 120, 120);
+
+  static const Color calorieRing = Color.fromARGB(255, 41, 151, 255);
+  static const Color carbsBar = Color.fromARGB(255, 255, 176, 46);
+  static const Color fatBar = Color.fromARGB(255, 72, 222, 140);
+  static const Color proteinBar = Color.fromARGB(255, 90, 210, 255);
 }
 
-const kGreyBoldText = TextStyle(color: Colors.grey, fontWeight: FontWeight.bold);
-const kTitleText = TextStyle(
-  color: Colors.white,
-  fontSize: 18.0,
-  fontWeight: FontWeight.w600,
-  letterSpacing: 2,
-);
-
-/// 深色底上的分段按鈕（SegmentedButton）共用樣式：
-/// 選取 = accent + 白字；未選取 = accentDim + 淺藍字，避免整顆變黑看不到選項。
-ButtonStyle segmentedStyleOnDark() {
-  return ButtonStyle(
-    backgroundColor: WidgetStateProperty.resolveWith((states) {
-      return states.contains(WidgetState.selected)
-          ? ElementColors.accent
-          : const Color.fromARGB(255, 34, 34, 34);
-    }),
-    foregroundColor: WidgetStateProperty.resolveWith((states) {
-      return states.contains(WidgetState.selected)
-          ? Colors.white
-          : ElementColors.lightUi;
-    }),
-    side: WidgetStateProperty.all(
-      const BorderSide(color: ElementColors.accent, width: 1),
-    ),
-  );
-}
+const TextStyle kGreyBoldText = TextStyle(color: Colors.grey, fontWeight: FontWeight.bold);

@@ -5,10 +5,6 @@ import '../../shell/shell.dart';
 import '../../survey/survey_screen.dart';
 import '../../user/user_profile.dart';
 
-/// 開 App 時的封面：藍底、白色圓圈、裡面一個藍色圖示，停 1 秒。
-/// 1 秒後：
-///   還沒有個人資料(第一次開 App) → 問卷(Survey)
-///   已經填過                     → 主畫面(Shell)
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -19,23 +15,18 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  // 和底部按鈕列選中時的藍色一樣
   static const Color _blue = Color.fromARGB(255, 0, 124, 226);
-
-  // 封面停留的時間
   static const Duration _showTime = Duration(seconds: 1);
 
   @override
   void initState() {
     super.initState();
-    _goNext(); // 不加 await：initState 不能等，畫面先畫出封面
+    _goNext();
   }
 
   Future<void> _goNext() async {
-    // 1. 先等 1 秒
     await Future<void>.delayed(_showTime);
 
-    // 2. 看有沒有個人資料，決定下一頁
     final UserProfile? profile = await DatabaseService.instance.getUserProfile();
 
     if (!mounted) {
@@ -49,12 +40,13 @@ class _SplashScreenState extends State<SplashScreen> {
       nextPage = const Shell();
     }
 
-    // pushReplacement：用下一頁「取代」封面，按返回鍵不會回到封面
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(
-        builder: (BuildContext routeContext) {
+      PageRouteBuilder<void>(
+        pageBuilder: (BuildContext routeContext, Animation<double> animation, Animation<double> secondaryAnimation) {
           return nextPage;
         },
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
       ),
     );
   }
@@ -65,15 +57,15 @@ class _SplashScreenState extends State<SplashScreen> {
       backgroundColor: _blue,
       body: Center(
         child: Container(
-          width: 160,
-          height: 160,
+          width: 130,
+          height: 130,
           decoration: const BoxDecoration(
             color: Colors.white,
-            shape: BoxShape.circle, // 圓形
+            shape: BoxShape.circle,
           ),
           child: const Icon(
             Icons.fitness_center,
-            size: 80,
+            size: 50,
             color: _blue,
           ),
         ),

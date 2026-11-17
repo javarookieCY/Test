@@ -267,8 +267,7 @@ const String _foodRefAsset = 'assets/data/food_ref.json';
 /// 第一次開資料庫時，把官方食品資料(json)匯入 food_ref；已經有資料就跳過。
 Future<void> seedFoodRefIfEmpty(Database db) async {
   // 先數 food_ref 有幾筆
-  final List<Map<String, Object?>> countRows =
-      await db.rawQuery('SELECT COUNT(*) AS c FROM food_ref');
+  final List<Map<String, Object?>> countRows = await db.rawQuery('SELECT COUNT(*) AS c FROM food_ref');
   final Object? countValue = countRows.first['c'];
   int count = 0;
   if (countValue != null) {

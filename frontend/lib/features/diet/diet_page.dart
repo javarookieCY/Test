@@ -7,6 +7,10 @@ import 'food/food_item.dart';
 import 'food/meal_item.dart';
 import 'food/food_search_screen.dart';
 
+import 'dialogs/food_form_dialog.dart';
+import 'dialogs/food_library_dialog.dart';
+import 'dialogs/log_weight_dialog.dart';
+
 import '../../user/user_profile.dart';
 
 import 'meal_list.dart';
@@ -26,10 +30,7 @@ class _DietPageState extends State<DietPage> {
   late final List<DateTime> _weekDates; // 這週的週一到週日
   late int _selectedIndex; // 目前看的是這週的第幾天(0 = 週一)
 
-  // 使用者自訂的餐點庫，從 SQLite 讀出來存在這裡
-  List<FoodItem> _foodLibrary = <FoodItem>[];
-
-  // 使用者個人資料；null 代表還沒做過 Onboarding
+  // 使用者個人資料；null 代表還沒做過問卷
   UserProfile? _profile;
 
   final List<MealItem> _mealItems = <MealItem>[
@@ -50,15 +51,6 @@ class _DietPageState extends State<DietPage> {
     return '$year-$month-$day';
   }
 
-  /// 文字 → 小數；不是數字(或留空)就當 0
-  double _parseOrZero(String text) {
-    final double? value = double.tryParse(text.trim());
-    if (value == null) {
-      return 0;
-    }
-    return value;
-  }
-
   /// 可能是 null 的數字；null 就當 0
   double _valueOrZero(double? value) {
     if (value == null) {
@@ -68,17 +60,6 @@ class _DietPageState extends State<DietPage> {
   }
 
   // ---------- 讀資料 ----------
-
-  /// 從 SQLite 讀出目前的餐點庫，更新畫面
-  Future<void> _loadFoodLibrary() async {
-    final List<FoodItem> foods = await DatabaseService.instance.getAllFoods();
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _foodLibrary = foods;
-    });
-  }
 
   /// 載入個人資料(記錄體重時要用)。
   /// 第一次開 App 的個人資料由問卷(Survey)負責填，這裡不再跳出 Onboarding。
@@ -102,8 +83,7 @@ class _DietPageState extends State<DietPage> {
   /// 從 SQLite 讀取指定日期的所有餐點明細，依餐別放進 _mealItems
   Future<void> _loadMealsForDate(DateTime date) async {
     final String dateKey = _dateKey(date);
-    final List<Map<String, dynamic>> mealFoods =
-        await DatabaseService.instance.getMealFoodsByDate(dateKey);
+    final List<Map<String, dynamic>> mealFoods = await DatabaseService.instance.getMealFoodsByDate(dateKey);
     _loadBurnedForDate(date);
 
     if (!mounted) {
@@ -147,100 +127,14 @@ class _DietPageState extends State<DietPage> {
     });
   }
 
-  // ---------- 餐點庫的新增、修改、刪除 ----------
-
-  /// 新增一種食物到餐點庫：寫入 SQLite，再重新整理列表
-  /// 回傳 true 代表存成功，false 代表存失敗（讓呼叫端知道要不要關對話框）
-  Future<bool> _addFoodToLibrary(FoodItem food) async {
-    try {
-      await DatabaseService.instance.insertFood(food);
-      await _loadFoodLibrary();
-      return true;
-    } catch (e) {
-      debugPrint('新增餐點失敗: $e'); // 印在 debug console，方便你自己抓錯
-      return false;
-    }
-  }
-
-  /// 修改餐點庫裡的一種食物
-  Future<bool> _updateFoodInLibrary(FoodItem food) async {
-    try {
-      await DatabaseService.instance.updateFood(food);
-      await _loadFoodLibrary();
-      return true;
-    } catch (e) {
-      debugPrint('修改餐點失敗: $e');
-      return false;
-    }
-  }
-
-  /// 從餐點庫刪除一項食物範本
-  Future<void> _deleteFoodFromLibrary(int id) async {
-    await DatabaseService.instance.deleteFood(id);
-    await _loadFoodLibrary();
-  }
-
   // ---------- 記錄體重 ----------
 
-  /// 記錄今天的體重；體重會影響目標（BMR/蛋白質），所以存完重新載入 profile
-  Future<void> _showLogWeightDialog() async {
-    // 輸入框預設填目前的體重(取到小數點後 1 位)；沒有個人資料就空白
-    String initialText = '';
-    final UserProfile? currentProfile = _profile;
-    if (currentProfile != null) {
-      initialText = currentProfile.weightKg.toStringAsFixed(1);
-    }
-    final TextEditingController controller = TextEditingController(text: initialText);
-
-    // 對話框按「儲存」會回傳輸入的體重；按「取消」或點外面關掉會回傳 null
-    final double? kg = await showDialog<double>(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        String? errorText;
-
-        // StatefulBuilder：讓對話框自己可以 setState(顯示錯誤訊息)
-        return StatefulBuilder(
-          builder: (BuildContext builderContext, StateSetter setDialogState) {
-            return AlertDialog(
-              title: const Text('記錄體重'),
-              content: TextField(
-                controller: controller,
-                autofocus: true,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: InputDecoration(
-                  labelText: '今天的體重 (kg)',
-                  errorText: errorText,
-                ),
-              ),
-              actions: <Widget>[
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(dialogContext);
-                  },
-                  child: const Text('取消'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    final double? value = double.tryParse(controller.text.trim());
-                    if (value == null || value < 25 || value > 400) {
-                      setDialogState(() {
-                        errorText = '請輸入 25–400 之間的數字';
-                      });
-                      return;
-                    }
-                    Navigator.pop(dialogContext, value);
-                  },
-                  child: const Text('儲存'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-
+  /// 跳出「記錄體重」對話框(在 dialogs/log_weight_dialog.dart)，
+  /// 拿到體重後存進資料庫；體重會影響目標(BMR/蛋白質)，所以存完重新載入 profile
+  Future<void> _logWeight() async {
+    final double? kg = await showLogWeightDialog(context, _profile);
     if (kg == null) {
-      return;
+      return; // 使用者按了取消
     }
 
     final String today = _dateKey(DateTime.now());
@@ -259,6 +153,18 @@ class _DietPageState extends State<DietPage> {
   }
 
   // ---------- 搜尋食品 ----------
+
+  /// 新增一種食物到餐點庫(搜尋畫面挑好食物時用)
+  /// 回傳 true 代表存成功，false 代表存失敗
+  Future<bool> _addFoodToLibrary(FoodItem food) async {
+    try {
+      await DatabaseService.instance.insertFood(food);
+      return true;
+    } catch (e) {
+      debugPrint('新增餐點失敗: $e'); // 印在 debug console，方便你自己抓錯
+      return false;
+    }
+  }
 
   /// 打開「手動搜尋」畫面：從 TFDA 食品營養庫即時搜尋，挑一筆加進餐點庫。
   /// 數值是每 100 克含量，缺值以 0 帶入。
@@ -294,329 +200,23 @@ class _DietPageState extends State<DietPage> {
     );
   }
 
-  // ---------- 新增 / 修改餐點的表單 ----------
-
-  /// 彈出「新增/修改餐點」表單：輸入名稱、熱量、蛋白質、碳水、脂肪、纖維、鈉。
-  /// foodToEdit 有傳就是修改模式，沒傳(null)就是新增模式。
-  void _showAddFoodDialog({FoodItem? foodToEdit}) {
-    bool isEdit = false;
-
-    // 修改模式：輸入框預設填原本的值(營養素是 0 的留空)
-    String nameText = '';
-    String caloriesText = '';
-    String proteinText = '';
-    String carbsText = '';
-    String fatText = '';
-    String fiberText = '';
-    String sodiumText = '';
-    if (foodToEdit != null) {
-      isEdit = true;
-      nameText = foodToEdit.name;
-      caloriesText = foodToEdit.calories.toString();
-      if (foodToEdit.protein > 0) {
-        proteinText = foodToEdit.protein.toString();
-      }
-      if (foodToEdit.carbs > 0) {
-        carbsText = foodToEdit.carbs.toString();
-      }
-      if (foodToEdit.fat > 0) {
-        fatText = foodToEdit.fat.toString();
-      }
-      if (foodToEdit.fiber > 0) {
-        fiberText = foodToEdit.fiber.toString();
-      }
-      if (foodToEdit.sodium > 0) {
-        sodiumText = foodToEdit.sodium.toString();
-      }
-    }
-
-    final TextEditingController nameController = TextEditingController(text: nameText);
-    final TextEditingController caloriesController = TextEditingController(text: caloriesText);
-    final TextEditingController proteinController = TextEditingController(text: proteinText);
-    final TextEditingController carbsController = TextEditingController(text: carbsText);
-    final TextEditingController fatController = TextEditingController(text: fatText);
-    final TextEditingController fiberController = TextEditingController(text: fiberText);
-    final TextEditingController sodiumController = TextEditingController(text: sodiumText);
-
-    String dialogTitle;
-    if (isEdit) {
-      dialogTitle = '修改餐點';
-    } else {
-      dialogTitle = '新增餐點';
-    }
-
-    showDialog<void>(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        // 用 StatefulBuilder 讓對話框內部能自己 setState 顯示錯誤訊息，
-        // 不用把整個 _DietPageState 都 rebuild
-        String? errorText;
-        bool isSaving = false;
-
-        return StatefulBuilder(
-          builder: (BuildContext builderContext, StateSetter setDialogState) {
-            // ----- 表單欄位 -----
-            final List<Widget> fields = <Widget>[
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: '名稱（例如：水煮蛋）'),
-              ),
-              TextField(
-                controller: caloriesController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: '熱量 (kcal) *必填'),
-              ),
-              TextField(
-                controller: proteinController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: '蛋白質 (g)，可留空'),
-              ),
-              TextField(
-                controller: carbsController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: '碳水化合物 (g)，可留空'),
-              ),
-              TextField(
-                controller: fatController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: '脂肪 (g)，可留空'),
-              ),
-              TextField(
-                controller: fiberController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: '膳食纖維 (g)，可留空'),
-              ),
-              TextField(
-                controller: sodiumController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: '鈉 (mg)，可留空'),
-              ),
-            ];
-
-            // 有錯誤訊息才在最下面顯示紅字
-            final String? currentError = errorText;
-            if (currentError != null) {
-              fields.add(const SizedBox(height: 8));
-              fields.add(Text(currentError, style: const TextStyle(color: Colors.red)));
-            }
-
-            // ----- 「取消」按鈕：儲存中不能按(onPressed 是 null 時按鈕會變灰) -----
-            VoidCallback? onCancelPressed;
-            if (!isSaving) {
-              onCancelPressed = () {
-                Navigator.pop(dialogContext);
-              };
-            }
-
-            // ----- 「儲存」按鈕：儲存中不能按 -----
-            VoidCallback? onSavePressed;
-            if (!isSaving) {
-              onSavePressed = () async {
-                final String name = nameController.text.trim();
-                final int? calories = int.tryParse(caloriesController.text.trim());
-
-                // 驗證失敗：直接把原因顯示在對話框裡，不要默默 return
-                if (name.isEmpty) {
-                  setDialogState(() {
-                    errorText = '請輸入名稱';
-                  });
-                  return;
-                }
-                if (calories == null) {
-                  setDialogState(() {
-                    errorText = '熱量請輸入數字';
-                  });
-                  return;
-                }
-
-                setDialogState(() {
-                  errorText = null;
-                  isSaving = true;
-                });
-
-                // 修改時保留原本的 id、圖片與說明（例如「每 100 克｜來源…」）
-                int? id;
-                String? imagePath;
-                String? description;
-                if (foodToEdit != null) {
-                  id = foodToEdit.id;
-                  imagePath = foodToEdit.imagePath;
-                  description = foodToEdit.description;
-                }
-
-                final FoodItem food = FoodItem(
-                  id: id,
-                  name: name,
-                  calories: calories,
-                  protein: _parseOrZero(proteinController.text),
-                  carbs: _parseOrZero(carbsController.text),
-                  fat: _parseOrZero(fatController.text),
-                  fiber: _parseOrZero(fiberController.text),
-                  sodium: _parseOrZero(sodiumController.text),
-                  imagePath: imagePath,
-                  description: description,
-                );
-
-                bool success;
-                if (isEdit) {
-                  success = await _updateFoodInLibrary(food);
-                } else {
-                  success = await _addFoodToLibrary(food);
-                }
-
-                // 存檔期間對話框可能已經被關掉
-                if (!dialogContext.mounted) {
-                  return;
-                }
-
-                if (success) {
-                  Navigator.pop(dialogContext);
-
-                  String message;
-                  if (isEdit) {
-                    message = '已修改「$name」';
-                  } else {
-                    message = '已新增「$name」';
-                  }
-                  // ignore: use_build_context_synchronously
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(message)),
-                  );
-                } else {
-                  setDialogState(() {
-                    isSaving = false;
-                    errorText = '儲存失敗，請稍後再試';
-                  });
-                }
-              };
-            }
-
-            // 「儲存」按鈕上的字：儲存中顯示轉圈圈
-            Widget saveButtonChild;
-            if (isSaving) {
-              saveButtonChild = const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              );
-            } else {
-              saveButtonChild = const Text('儲存');
-            }
-
-            return AlertDialog(
-              title: Text(dialogTitle),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: fields,
-                ),
-              ),
-              actions: <Widget>[
-                TextButton(
-                  onPressed: onCancelPressed,
-                  child: const Text('取消'),
-                ),
-                ElevatedButton(
-                  onPressed: onSavePressed,
-                  child: saveButtonChild,
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
   // ---------- 管理餐點庫 ----------
 
-  /// 彈出「管理餐點庫」列表：可以看目前有哪些餐點、修改、刪除、或新增
-  void _showManageFoodLibraryDialog() {
+  /// 打開「管理餐點庫」對話框(在 dialogs/food_library_dialog.dart)。
+  /// 裡面按「修改」「新增」會打開表單(dialogs/food_form_dialog.dart)，按「搜尋」會打開搜尋畫面。
+  void _openFoodLibrary() {
     showDialog<void>(
       context: context,
       builder: (BuildContext dialogContext) {
-        return StatefulBuilder(
-          builder: (BuildContext builderContext, StateSetter setDialogState) {
-            // 餐點庫是空的：顯示提示文字；有東西：列出來
-            Widget libraryContent;
-            if (_foodLibrary.isEmpty) {
-              libraryContent = const Text('目前還沒有任何餐點，點下方「新增」開始建立吧！');
-            } else {
-              libraryContent = ListView.builder(
-                shrinkWrap: true,
-                itemCount: _foodLibrary.length,
-                itemBuilder: (BuildContext itemContext, int index) {
-                  final FoodItem food = _foodLibrary[index];
-                  final int calories = food.calories;
-
-                  return ListTile(
-                    title: Text(food.name),
-                    subtitle: Text('$calories kcal'),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: <Widget>[
-                        IconButton(
-                          icon: const Icon(Icons.edit, color: Colors.blue),
-                          onPressed: () {
-                            Navigator.pop(dialogContext);
-                            _showAddFoodDialog(foodToEdit: food);
-                          },
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () async {
-                            final int? id = food.id;
-                            if (id != null) {
-                              await _deleteFoodFromLibrary(id);
-                            }
-                            setDialogState(() {}); // 刪完重畫對話框的列表
-                          },
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              );
-            }
-
-            return AlertDialog(
-              title: const Text('我的餐點'),
-              content: SizedBox(
-                width: double.maxFinite,
-                child: libraryContent,
-              ),
-              actionsAlignment: MainAxisAlignment.spaceEvenly,
-              actions: <Widget>[
-                SizedBox(
-                  width: double.maxFinite,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: <Widget>[
-                      TextButton(
-                        onPressed: () {
-                          Navigator.pop(dialogContext);
-                        },
-                        child: const Text('關閉'),
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          Navigator.pop(dialogContext);
-                          _openFoodSearch();
-                        },
-                        child: const Text('搜尋'),
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          Navigator.pop(dialogContext);
-                          _showAddFoodDialog();
-                        },
-                        child: const Text('新增'),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            );
+        return FoodLibraryDialog(
+          onEdit: (FoodItem food) {
+            showFoodFormDialog(context, food); // 修改模式
+          },
+          onSearch: () {
+            _openFoodSearch();
+          },
+          onAdd: () {
+            showFoodFormDialog(context, null); // 新增模式
           },
         );
       },
@@ -641,7 +241,6 @@ class _DietPageState extends State<DietPage> {
     _weekDates = weekDates;
     _selectedIndex = _today.weekday - 1;
 
-    _loadFoodLibrary(); // App 一開啟就先把餐點庫讀出來
     _loadMealsForDate(_weekDates[_selectedIndex]); // 載入今天的餐點紀錄
     _loadProfile(); // 載入個人資料
   }
@@ -666,7 +265,7 @@ class _DietPageState extends State<DietPage> {
                       children: <Widget>[
                         TextButton.icon(
                           onPressed: () {
-                            _showLogWeightDialog();
+                            _logWeight();
                           },
                           icon: const Icon(Icons.monitor_weight_outlined, color: Colors.white),
                           label: const Text(
@@ -686,7 +285,7 @@ class _DietPageState extends State<DietPage> {
                         ),
                         TextButton.icon(
                           onPressed: () {
-                            _showManageFoodLibraryDialog();
+                            _openFoodLibrary();
                           },
                           icon: const Icon(Icons.list_alt, color: Colors.white),
                           label: const Text(

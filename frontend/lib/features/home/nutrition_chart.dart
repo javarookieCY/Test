@@ -1,55 +1,95 @@
 import 'package:flutter/material.dart';
 
 import '../../utils/constants.dart';
+import 'calorie_gauge.dart';
 
-/// 首頁的卡片：顯示今天還可以吃多少熱量、蛋白質。
-/// 自己不讀資料庫，數字由 Home 算好傳進來。
 class NutritionChart extends StatelessWidget {
   const NutritionChart({
     super.key,
     required this.remainingCalorie,
     required this.targetCalorie,
-    required this.remainingProtein,
+    required this.consumedCarbs,
+    required this.targetCarbs,
+    required this.consumedFat,
+    required this.targetFat,
+    required this.consumedProtein,
     required this.targetProtein,
+    required this.onTap,
   });
 
-  final int remainingCalorie; // 剩餘熱量 (kcal)，可能是負的(吃超過)
-  final int targetCalorie; // 目標熱量 (kcal)
-  final int remainingProtein; // 剩餘蛋白質 (g)
-  final int targetProtein; // 目標蛋白質 (g)
+  final int remainingCalorie;
+  final int targetCalorie;
+  final int consumedCarbs;
+  final int targetCarbs;
+  final int consumedFat;
+  final int targetFat;
+  final int consumedProtein;
+  final int targetProtein;
+  final VoidCallback onTap;
+
+  static double _usedProgress(int remaining, int target) {
+    if (target <= 0) {
+      return 0;
+    }
+
+    final int used = target - remaining;
+    double progress = used.toDouble() / target.toDouble();
+
+    if (progress < 0) {
+      progress = 0;
+    }
+    if (progress > 1) {
+      progress = 1;
+    }
+    return progress;
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      color: ElementColors.panelBg,
-      elevation: 0, // 不要陰影
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: ElementColors.panelBorder, width: 1),
-      ),
+    Color gaugeColor = ElementColors.calorieRing;
+    Color numberColor = Colors.white;
+    int number = remainingCalorie;
+    String label = 'kcal 剩餘';
+    if (remainingCalorie < 0) {
+      gaugeColor = ElementColors.warning;
+      numberColor = ElementColors.warning;
+      number = -remainingCalorie;
+      label = 'kcal 已超過';
+    }
+
+    final double progress = _usedProgress(remainingCalorie, targetCalorie);
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.symmetric(vertical: 8),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            const Text(
-              '今日剩餘',
-              style: TextStyle(color: Colors.grey, fontSize: 14, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            _NutrientRow(
-              label: '熱量',
-              remaining: remainingCalorie,
-              target: targetCalorie,
-              unit: 'kcal',
+            CalorieGauge(
+              progress: progress,
+              color: gaugeColor,
+              number: number,
+              numberColor: numberColor,
+              label: label,
             ),
             const SizedBox(height: 12),
-            _NutrientRow(
-              label: '蛋白質',
-              remaining: remainingProtein,
-              target: targetProtein,
-              unit: 'g',
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Expanded(
+                  child: _MacroBar(label: '碳水', consumed: consumedCarbs, target: targetCarbs, color: ElementColors.carbsBar),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _MacroBar(label: '脂肪', consumed: consumedFat, target: targetFat, color: ElementColors.fatBar),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _MacroBar(label: '蛋白質', consumed: consumedProtein, target: targetProtein, color: ElementColors.proteinBar),
+                ),
+              ],
             ),
           ],
         ),
@@ -58,52 +98,58 @@ class NutritionChart extends StatelessWidget {
   }
 }
 
-/// 卡片裡的一列，例如：熱量          1350 kcal / 目標 2000
-class _NutrientRow extends StatelessWidget {
-  const _NutrientRow({
+class _MacroBar extends StatelessWidget {
+  const _MacroBar({
     required this.label,
-    required this.remaining,
+    required this.consumed,
     required this.target,
-    required this.unit,
+    required this.color,
   });
 
   final String label;
-  final int remaining;
+  final int consumed;
   final int target;
-  final String unit;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
-    // 還有剩：顯示剩多少；吃超過(負數)：顯示「超過 多少」
-    String valueText;
-    if (remaining >= 0) {
-      valueText = '$remaining $unit';
-    } else {
-      final int over = -remaining;
-      valueText = '超過 $over $unit';
+    double progress = 0;
+    if (target > 0) {
+      progress = consumed.toDouble() / target.toDouble();
+    }
+    if (progress > 1) {
+      progress = 1;
     }
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      crossAxisAlignment: CrossAxisAlignment.end,
+    Color barColor = color;
+    Color valueColor = Colors.grey;
+    if (consumed > target) {
+      barColor = ElementColors.warning;
+      valueColor = ElementColors.warning;
+    }
+
+    final String valueText = '$consumed/$target g';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: <Widget>[
         Text(
           label,
-          style: const TextStyle(color: Colors.white, fontSize: 18),
+          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
         ),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: <Widget>[
-            Text(
-              valueText,
-              style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            Text(
-              '目標 $target $unit',
-              style: const TextStyle(color: Colors.grey, fontSize: 12),
-            ),
-          ],
+        const SizedBox(height: 6),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: progress,
+            minHeight: 8,
+            color: barColor,
+            backgroundColor: color.withValues(alpha: 0.35),
+          ),
         ),
+        const SizedBox(height: 6),
+        Text(valueText, style: TextStyle(color: valueColor, fontSize: 12)),
       ],
     );
   }

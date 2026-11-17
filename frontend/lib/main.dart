@@ -1,6 +1,7 @@
 import 'package:device_preview/device_preview.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'utils/constants.dart';
 import 'utils/scroll_behavior.dart';
 
@@ -24,6 +25,17 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       locale: DevicePreview.locale(context),
+      // 中文語系：讓日期滾輪顯示「2026年 11月 17日」，而不是英文的 November
+      localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      // 第一個是預設：手機語言不在清單裡時就用繁體中文
+      supportedLocales: const <Locale>[
+        Locale('zh', 'TW'),
+        Locale('en', 'US'),
+      ],
       builder: DevicePreview.appBuilder,
       scrollBehavior: MyScrollBehavior(),
       title: 'Demo',

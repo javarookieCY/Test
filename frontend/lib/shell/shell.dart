@@ -5,6 +5,7 @@ import 'package:flutter_application_1/features/stats/stats_page.dart';
 import 'package:flutter_application_1/shell/buttons/button_row.dart';
 import 'package:flutter_application_1/features/home/home.dart';
 import 'package:flutter_application_1/screens/blank_page.dart';
+import 'package:flutter_application_1/shell/page_index.dart';
 
 class Shell extends StatefulWidget {
   const Shell({super.key});
@@ -16,49 +17,62 @@ class Shell extends StatefulWidget {
 }
 
 class _ShellState extends State<Shell> {
-  // 順序和 HomeButtonRow 的 _icons 對應
-  static const List<Widget> _pages = <Widget>[
-    Home(),
-    ExercisePage(),
-    DietPage(),
-    StatsPage(),
-    BlankPage(),
-  ];
+  int _currentPageIndex = PageIndex.home;
+  final PageController _pageController = PageController(initialPage: PageIndex.home);
 
-  // 目前的頁面編號
-  int _currentPageIndex = 0;
-
-
-
-  
-  // 按鈕列回報被點的編號時呼叫：換頁
   void _switchPage(int pageIndex) {
+    final int previousIndex = _currentPageIndex;
     setState(() {
       _currentPageIndex = pageIndex;
     });
+
+    if (pageIndex > previousIndex + 1) {
+      _pageController.jumpToPage(pageIndex - 1);
+    } else if (pageIndex < previousIndex - 1) {
+      _pageController.jumpToPage(pageIndex + 1);
+    }
+
+    _pageController.animateToPage(
+      pageIndex,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      // 基底顏色
-      backgroundColor: const Color.fromARGB(255, 0, 0, 0),
+    final List<Widget> pages = <Widget>[
+      Home(onGoToPage: _switchPage),
+      const ExercisePage(),
+      const DietPage(),
+      const StatsPage(),
+      const BlankPage(),
+    ];
 
+    return Scaffold(
+      backgroundColor: const Color.fromARGB(255, 0, 0, 0),
       body: SafeArea(
         top: false,
         child: Column(
           children: <Widget>[
-            // 主畫面底
             Expanded(
               child: ClipRRect(
                 borderRadius: const BorderRadius.vertical(
                   bottom: Radius.circular(48),
                 ),
-                child: _pages[_currentPageIndex],
+                child: PageView(
+                  controller: _pageController,
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: pages,
+                ),
               ),
             ),
-
-            // 按鈕列固定在底部
             HomeButtonRow(
               activeButtonIndex: _currentPageIndex,
               onButtonTapped: _switchPage,
