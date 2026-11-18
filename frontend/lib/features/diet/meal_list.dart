@@ -13,13 +13,22 @@ class MealList extends StatelessWidget{
   }
   
   @override
-  Widget build(BuildContext context) {    
+  Widget build(BuildContext context) {
+    // 每個餐別(早餐、午餐、晚餐、點心)做一張卡片
+    final List<Widget> cards = <Widget>[];
+    for (final MealType meal in MealType.values) {
+      final Widget card = MealCard(
+        meal: meal,
+        onAdd: () {
+          _addMeal(meal);
+        },
+      );
+      cards.add(card);
+    }
+
     return Column(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: [
-        for (final meal in MealType.values)
-          MealCard(meal: meal, onAdd: () => _addMeal(meal)),
-      ],
+      children: cards,
     );
   }
 }

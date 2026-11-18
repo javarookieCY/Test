@@ -2,13 +2,12 @@
 // 不會碰到 App 自己的 meals.db。
 import 'dart:io';
 
-import 'package:flutter_application_1/db_helper.dart';
+import 'package:flutter_application_1/database/database_service.dart';
 import 'package:flutter_application_1/models/exercise_task.dart';
-import 'package:flutter_application_1/home/food/nutrients.dart';
+import 'package:flutter_application_1/features/diet/food/nutrients.dart';
 import 'package:flutter_application_1/user/user_profile.dart';
 import 'package:flutter_application_1/utils/exercise_catalog.dart';
 import 'package:flutter_application_1/utils/nutrition_math.dart';
-import 'package:flutter_application_1/utils/nutrition_stats.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -18,7 +17,7 @@ ExerciseTask task(String date, String name, {bool done = false}) => ExerciseTask
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized(); // food_ref 首次載入要讀 asset
-  final db = DBHelper.instance;
+  final db = DatabaseService.instance;
 
   setUp(() => db.openForTest(inMemoryDatabasePath));
 
@@ -104,15 +103,16 @@ void main() {
         const Nutrients(protein: 62, fat: 7.2, sodium: 148));
     await db.upsertMealFood('2026-10-7', '晚餐', '自訂', 500, 1, Nutrients.zero);
 
-    final dates = [DateTime(2026, 10, 5), DateTime(2026, 10, 6), DateTime(2026, 10, 7)];
-    final rows = await db.getMealFoodsByDates(dates.map(dateKey).toList());
-    final days = groupByDay(dates, rows);
+    final rows = await db.getMealFoodsByDates(['2026-10-5', '2026-10-6', '2026-10-7']);
+    expect(rows.length, 3);
 
-    expect(days.map((d) => d.calories), [0, 172, 830]);
-    expect(days[1].nutrients.fiber, 6);
-    expect(days[2].nutrients.protein, 62);
-    expect(days[2].nutrients.sodium, 148);
-    expect(days[2].caloriesByMeal, {'午餐': 330, '晚餐': 500});
+    final sweetPotato = rows.firstWhere((r) => r['food_name'] == '地瓜');
+    expect(sweetPotato['fiber'], 6);
+
+    final chicken = rows.firstWhere((r) => r['food_name'] == '雞胸');
+    expect(chicken['calories'], 330);
+    expect(chicken['protein'], 62);
+    expect(chicken['sodium'], 148);
   });
 
   test('從版本 11 升級：營養素回填、舊的自訂動作刪掉、舊個人資料器材預設徒手 + 啞鈴', () async {

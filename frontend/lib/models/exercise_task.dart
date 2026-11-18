@@ -16,25 +16,49 @@ enum ExerciseTaskCategory { strength, cardio, flexibility }
     傳入db的字串看是ExerciseTaskCategory的哪個型別
 */
 extension ExerciseTaskCategoryX on ExerciseTaskCategory {
-  String get dbValue => switch (this) {
-        ExerciseTaskCategory.strength => 'strength',
-        ExerciseTaskCategory.cardio => 'cardio',
-        ExerciseTaskCategory.flexibility => 'flexibility',
-      };
+  /// 存進資料庫的字串
+  String get dbValue {
+    switch (this) {
+      case ExerciseTaskCategory.strength:
+        return 'strength';
+      case ExerciseTaskCategory.cardio:
+        return 'cardio';
+      case ExerciseTaskCategory.flexibility:
+        return 'flexibility';
+    }
+  }
 
-  String get label => switch (this) {
-        ExerciseTaskCategory.strength => '重訓',
-        ExerciseTaskCategory.cardio => '有氧',
-        ExerciseTaskCategory.flexibility => '伸展',
-      };
+  /// 畫面上顯示的文字
+  String get label {
+    switch (this) {
+      case ExerciseTaskCategory.strength:
+        return '重訓';
+      case ExerciseTaskCategory.cardio:
+        return '有氧';
+      case ExerciseTaskCategory.flexibility:
+        return '伸展';
+    }
+  }
 
-  bool get usesSets => this == ExerciseTaskCategory.strength;
+  /// 重訓記「組數」；有氧、伸展記「分鐘數」
+  bool get usesSets {
+    if (this == ExerciseTaskCategory.strength) {
+      return true;
+    }
+    return false;
+  }
 
-  static ExerciseTaskCategory fromDbValue(String v) => switch (v) {
-        'cardio' => ExerciseTaskCategory.cardio,
-        'flexibility' => ExerciseTaskCategory.flexibility,
-        _ => ExerciseTaskCategory.strength,
-      };
+  /// 資料庫的字串 → enum；不認得的字串一律當重訓
+  static ExerciseTaskCategory fromDbValue(String value) {
+    switch (value) {
+      case 'cardio':
+        return ExerciseTaskCategory.cardio;
+      case 'flexibility':
+        return ExerciseTaskCategory.flexibility;
+      default:
+        return ExerciseTaskCategory.strength;
+    }
+  }
 }
 
 /// 一筆「今日訓練清單」的任務。對應 SQLite 的 exercise_tasks 表
@@ -48,7 +72,7 @@ class ExerciseTask {
     required this.name,
     this.sets,
     this.minutes,
-    this.done = false,
+    this.done = false, // 不填就是 false
   });
 
   final int? id;
@@ -64,27 +88,78 @@ class ExerciseTask {
   */
   String get detailLabel {
     if (category.usesSets) {
-      return sets != null ? '$sets 組' : '';
+      if (sets == null) {
+        return '';
+      }
+      return '$sets 組';
     }
-    return minutes != null ? '$minutes 分鐘' : '';
+
+    if (minutes == null) {
+      return '';
+    }
+    return '$minutes 分鐘';
   }
 
-  Map<String, dynamic> toMap() => {
-        'date': date,
-        'category': category.dbValue,
-        'name': name,
-        'sets': sets,
-        'minutes': minutes,
-        'done': done ? 1 : 0,
-      };
+  /// 物件 → Map(存進資料庫用)
+  Map<String, dynamic> toMap() {
+    // 資料庫沒有 bool，用 1 代表打勾、0 代表沒打勾
+    int doneValue;
+    if (done) {
+      doneValue = 1;
+    } else {
+      doneValue = 0;
+    }
 
-  factory ExerciseTask.fromMap(Map<String, dynamic> map) => ExerciseTask(
-        id: map['id'] as int?,
-        date: map['date'] as String,
-        category: ExerciseTaskCategoryX.fromDbValue(map['category'] as String),
-        name: map['name'] as String,
-        sets: (map['sets'] as num?)?.toInt(),
-        minutes: (map['minutes'] as num?)?.toInt(),
-        done: (map['done'] as num).toInt() == 1,
-      );
+    final Map<String, dynamic> map = <String, dynamic>{
+      'date': date,
+      'category': category.dbValue,
+      'name': name,
+      'sets': sets,
+      'minutes': minutes,
+      'done': doneValue,
+    };
+    return map;
+  }
+
+  /// Map → 物件(從資料庫讀出來用)
+  factory ExerciseTask.fromMap(Map<String, dynamic> map) {
+    final int? id = map['id'] as int?;
+    final String date = map['date'] as String;
+    final String categoryText = map['category'] as String;
+    final ExerciseTaskCategory category = ExerciseTaskCategoryX.fromDbValue(categoryText);
+    final String name = map['name'] as String;
+
+    // sets、minutes 可能是 null(兩者只會有一個有值)
+    int? sets;
+    final Object? setsValue = map['sets'];
+    if (setsValue != null) {
+      final num setsNumber = setsValue as num;
+      sets = setsNumber.toInt();
+    }
+
+    int? minutes;
+    final Object? minutesValue = map['minutes'];
+    if (minutesValue != null) {
+      final num minutesNumber = minutesValue as num;
+      minutes = minutesNumber.toInt();
+    }
+
+    final num doneNumber = map['done'] as num;
+    bool done;
+    if (doneNumber.toInt() == 1) {
+      done = true;
+    } else {
+      done = false;
+    }
+
+    return ExerciseTask(
+      id: id,
+      date: date,
+      category: category,
+      name: name,
+      sets: sets,
+      minutes: minutes,
+      done: done,
+    );
+  }
 }
